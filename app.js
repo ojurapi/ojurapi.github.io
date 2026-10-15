@@ -365,7 +365,7 @@ function apiaryForm(a) {
   form({
     title: isNew ? 'Nouveau rucher' : 'Modifier le rucher',
     fields: [{ name: 'name', label: 'Nom', value: a.name }, { name: 'lat', label: 'Latitude', value: a.lat == null ? '' : a.lat, inputmode: 'decimal' }, { name: 'lng', label: 'Longitude', value: a.lng == null ? '' : a.lng, inputmode: 'decimal' }, { name: 'notes', label: 'Notes (accès, floraison…)', type: 'textarea', value: a.notes }],
-    extra: '<div class="actions"><button type="button" class="small" data-act="geoFill">📍 Utiliser ma position</button></div>',
+    extra: '<div class="actions"><button type="button" class="small" data-act="pickMap">🗺 Choisir sur la carte</button><button type="button" class="small" data-act="geoFill">📍 Ma position</button></div>',
     onSubmit(v) {
       if (!v.name) { toast('Donnez un nom au rucher'); return false; }
       if (isNew) { a = { id: uid() }; db.apiaries.push(a); }
@@ -452,6 +452,70 @@ function superForm(s) {
   });
 }
 
+/* ================= choix d'une position sur la carte ================= */
+let leafletP = null;
+function ensureLeaflet() {
+  if (window.L) return Promise.resolve();
+  if (leafletP) return leafletP;
+  leafletP = new Promise((res, rej) => {
+    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'lib/leaflet/leaflet.css'; document.head.appendChild(l);
+    const s = document.createElement('script'); s.src = 'lib/leaflet/leaflet.js'; s.onload = () => res(); s.onerror = () => { leafletP = null; rej(new Error('leaflet')); };
+    document.head.appendChild(s);
+  });
+  return leafletP;
+}
+async function openMapPicker() {
+  const f = $('#f');
+  if (!f || !f.elements.lat || $('#mapPicker')) return;
+  try { await ensureLeaflet(); } catch (e) { toast('Carte indisponible'); return; }
+  const lat0 = num(f.elements.lat.value), lng0 = num(f.elements.lng.value);
+  let c = [46.8, 8.2], z = 7;
+  if (lat0 != null && lng0 != null) { c = [lat0, lng0]; z = 15; } else {
+    const a = db.apiaries.find(x => x.lat != null && x.lng != null);
+    if (a) { c = [a.lat, a.lng]; z = 11; }
+  }
+  const box = document.createElement('div'); box.id = 'mapPicker';
+  box.innerHTML = '<div class="mp-bar"><button type="button" data-mp="cancel">✕ Annuler</button><form class="mp-search"><input type="search" placeholder="Rechercher un lieu…" autocomplete="off"><button>🔍</button></form></div>' +
+    '<div class="mp-wrap"><div class="mp-map" id="mpMap"></div><div class="mp-pin" aria-hidden="true"><svg viewBox="0 0 24 34" width="36" height="51"><path d="M12 1C5.9 1 1 5.9 1 12c0 8.3 11 21 11 21s11-12.700 11-21C23 5.9 18.100 1 12 1z" fill="#d93025" stroke="#7a1410" stroke-width="1.500"/><circle cx="12" cy="12" r="4.200" fill="#fff"/></svg></div></div>' +
+    '<div class="mp-foot"><div class="mp-coords"></div><div class="mp-hint">Déplacez la carte : la position est celle du repère rouge. Touchez la carte pour recentrer.</div><div class="mp-btns"><button type="button" data-mp="gps">📍 Ma position</button><button type="button" class="primary" data-mp="ok">Valider cette position</button></div></div>';
+  document.body.appendChild(box);
+  const map = L.map('mpMap', { zoomControl: true }).setView(c, z);
+  const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  let warned = false;
+  tiles.on('tileerror', () => { if (!warned) { warned = true; toast('Fond de carte indisponible (hors ligne ?). Saisissez les coordonnées à la main.'); } });
+  if (navigator.onLine === false) { warned = true; toast('Hors ligne : la carte ne peut pas se charger.'); }
+  const coords = box.querySelector('.mp-coords');
+  const upd = () => { const p = map.getCenter(); coords.textContent = p.lat.toFixed(5) + ', ' + p.lng.toFixed(5); };
+  map.on('move', upd); upd();
+  map.on('click', e => map.panTo(e.latlng));
+  setTimeout(() => map.invalidateSize(), 60);
+  box._map = map;
+  const close = () => { map.remove(); box.remove(); };
+  box.querySelector('.mp-search').onsubmit = async e => {
+    e.preventDefault();
+    const q = e.target.querySelector('input').value.trim(); if (!q) return;
+    try {
+      const r = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(q));
+      const j = await r.json();
+      if (j && j[0]) map.setView([parseFloat(j[0].lat), parseFloat(j[0].lon)], 15); else toast('Lieu introuvable');
+    } catch (err) { toast('Recherche impossible (hors ligne ?)'); }
+  };
+  box.addEventListener('click', e => {
+    const b = e.target.closest('[data-mp]'); if (!b) return;
+    if (b.dataset.mp === 'cancel') close();
+    if (b.dataset.mp === 'gps') {
+      if (!navigator.geolocation) { toast('Position indisponible'); return; }
+      toast('Recherche de la position…');
+      navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude, p.coords.longitude], 17), () => toast('Position refusée ou indisponible'), { enableHighAccuracy: true, timeout: 15000 });
+    }
+    if (b.dataset.mp === 'ok') {
+      const p = map.getCenter(), cur = $('#f');
+      if (cur && cur.elements.lat) { cur.elements.lat.value = p.lat.toFixed(6); cur.elements.lng.value = p.lng.toFixed(6); }
+      close(); toast('Position choisie');
+    }
+  });
+}
+
 /* ================= export / import ================= */
 function csvText(rows) { return '﻿' + rows.map(r => r.map(c => { c = String(c == null ? '' : c); return /[;"\n\r]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(';')).join('\r\n'); }
 const EXPORTS = {
@@ -495,10 +559,11 @@ const ACT = {
     db.hives.forEach(h => { if (h.apiaryId === a.id) h.apiaryId = ''; }); db.tasks.forEach(t => { if (t.apiaryId === a.id) t.apiaryId = ''; });
     db.apiaries = db.apiaries.filter(x => x.id !== a.id); save(); location.hash = '#/ruchers';
   },
+  pickMap() { openMapPicker(); },
   geoFill() {
     if (!navigator.geolocation) { toast('Position indisponible'); return; }
     toast('Recherche de la position…');
-    navigator.geolocation.getCurrentPosition(p => { const f = $('#f'); if (!f) return; f.lat.value = p.coords.latitude.toFixed(6); f.lng.value = p.coords.longitude.toFixed(6); toast('Position renseignée'); }, () => toast('Position refusée ou indisponible'), { enableHighAccuracy: true, timeout: 15000 });
+    navigator.geolocation.getCurrentPosition(p => { const f = $('#f'); if (!f) return; f.elements.lat.value = p.coords.latitude.toFixed(6); f.elements.lng.value = p.coords.longitude.toFixed(6); toast('Position renseignée'); }, () => toast('Position refusée ou indisponible'), { enableHighAccuracy: true, timeout: 15000 });
   },
   addHive(el) { hiveForm(el && el.dataset.ap); },
   editHive(el) { editHiveForm(H(el.dataset.id)); },

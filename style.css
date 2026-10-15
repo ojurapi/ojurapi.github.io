@@ -88,3 +88,18 @@ svg.map{width:100%;height:auto;background:var(--card);border:1px solid var(--lin
   .label svg{width:100%;height:auto}
   .label div{font:700 14pt sans-serif;margin-top:1mm}
 }
+
+/* sélecteur de position sur carte */
+#mapPicker{position:fixed;inset:0;z-index:55;background:var(--bg);display:flex;flex-direction:column}
+.mp-bar{display:flex;gap:8px;align-items:center;padding:calc(8px + env(safe-area-inset-top)) 10px 8px;background:var(--honey)}
+.mp-bar>button{background:rgba(255,255,255,.4);border:0;color:#2b1d00;white-space:nowrap}
+.mp-search{display:flex;gap:6px;flex:1;min-width:0}
+.mp-search input{flex:1;min-width:0;background:#fff;color:#222}
+.mp-search button{background:rgba(255,255,255,.4);border:0;color:#2b1d00;padding:8px 12px}
+.mp-wrap{position:relative;flex:1;min-height:0;isolation:isolate}
+.mp-map{position:absolute;inset:0;background:#e8e4d8}
+.mp-pin{position:absolute;left:50%;top:50%;transform:translate(-50%,-100%);z-index:1100;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+.mp-foot{padding:10px 12px calc(12px + env(safe-area-inset-bottom));background:var(--card);border-top:1px solid var(--line)}
+.mp-coords{font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
+.mp-hint{font-size:12.5px;color:var(--mute);text-align:center;margin:2px 0 8px}
+.mp-btns{display:flex;gap:8px}.mp-btns button{flex:1}
