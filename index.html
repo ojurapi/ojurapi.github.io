@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#d99a1c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="O Jur'Api">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>O Jur'Api</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top"><h1 id="title">O Jur'Api</h1><div id="topActions"></div></header>
+<main id="view"></main>
+<nav class="tabs" id="tabs">
+  <a href="#/accueil" data-tab="accueil"><span>⌂</span>Accueil</a>
+  <a href="#/ruchers" data-tab="ruchers"><span>⬢</span>Ruchers</a>
+  <a href="#/ruches" data-tab="ruches"><span>▦</span>Ruches</a>
+  <a href="#/scan" data-tab="scan"><span>◎</span>Scan</a>
+  <a href="#/plus" data-tab="plus"><span>⋯</span>Plus</a>
+</nav>
+<div id="overlay" hidden></div>
+<div id="toast" hidden></div>
+<div id="printSheet" hidden></div>
+<script src="lib/qrcode.js"></script>
+<script src="lib/jsQR.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
