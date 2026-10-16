@@ -103,3 +103,67 @@ svg.map{width:100%;height:auto;background:var(--card);border:1px solid var(--lin
 .mp-coords{font-weight:700;text-align:center;font-variant-numeric:tabular-nums}
 .mp-hint{font-size:12.5px;color:var(--mute);text-align:center;margin:2px 0 8px}
 .mp-btns{display:flex;gap:8px}.mp-btns button{flex:1}
+
+/* formulaire d'intervention : Reine / Pontes OK-KO et compteurs d'ajouts */
+[hidden]{display:none!important}
+.lgbox{margin:10px 0 2px;padding:4px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+.trirow{display:flex;align-items:center;gap:10px;padding:8px 0}
+.trirow+.trirow{border-top:1px dashed var(--line)}
+.trirow>span{flex:1;font-weight:600}
+.tri{display:flex;gap:8px}
+.tri button{min-width:72px;padding:9px 14px}
+.tri button[data-v=ok].on{background:var(--ok);border-color:var(--ok);color:#fff}
+.tri button[data-v=ko].on{background:var(--danger);border-color:var(--danger);color:#fff}
+.step{display:flex;align-items:center;gap:8px;padding:7px 0}
+.step+.step{border-top:1px dashed var(--line)}
+.step>span{flex:1}
+.step button{width:44px;padding:8px 0;font-size:20px;line-height:1}
+.step input{width:64px;text-align:center;padding:9px 4px}
+
+/* gros boutons-icônes (ergonomie gants / plein soleil) */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 8px}
+.tiles.tiles3{grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:116px;padding:12px 6px;border-radius:22px;
+  background:var(--card);border:2px solid var(--line);color:var(--ink);text-decoration:none;box-shadow:var(--shadow);font-weight:700;font-size:16px;font-family:inherit}
+.tile:active{transform:scale(.97)}
+.tile .ico{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:34px;line-height:1;
+  background:linear-gradient(rgba(255,255,255,.7),rgba(255,255,255,.7)),var(--c)}
+.tiles3 .tile{min-height:98px;font-size:14px;gap:6px}
+.tiles3 .tile .ico{width:50px;height:50px;font-size:27px}
+.tile.on{border-color:var(--honey);box-shadow:0 0 0 3px var(--honey-l),var(--shadow)}
+.typegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px}
+.typegrid button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 2px;min-height:76px;font-size:13px;border-radius:16px;line-height:1.15}
+.typegrid .ico{font-size:30px;line-height:1}
+.typegrid button.on{border-color:var(--honey);background:var(--honey-l);box-shadow:0 0 0 2px var(--honey)}
+.tri button{min-width:92px;min-height:56px;font-size:18px;border-radius:16px}
+.step button{width:54px;height:54px;font-size:26px;border-radius:16px}
+.step input{width:72px;font-size:20px;font-weight:700;padding:12px 4px}
+.tabs a span{font-size:24px}
+
+/* grosses tuiles d'accueil */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 6px}
+.tile{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:132px;padding:14px 8px;
+  border-radius:22px;border:2px solid var(--line);background:var(--card);color:var(--ink);text-decoration:none;font:inherit;font-weight:700;font-size:18px;line-height:1.15;box-shadow:var(--shadow);cursor:pointer}
+.tile:active{transform:scale(.97);border-color:var(--c)}
+.tile .ti{position:relative;width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--c)}
+.tile .ti::before{content:'';position:absolute;inset:0;border-radius:50%;background:var(--c);opacity:.16}
+.tile .ti svg{position:relative;width:46px;height:46px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.bdg{position:absolute;top:-4px;right:-8px;min-width:27px;height:27px;padding:0 7px;border-radius:99px;background:#e5322d;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;font-weight:800;border:2px solid var(--bg)}
+.band{padding:12px;border-radius:var(--r);font-weight:800;font-size:19px;text-align:center;margin:0 0 10px}
+/* formulaire d'intervention : boutons plus gros */
+.tri button{min-width:96px;min-height:58px;font-size:19px}
+.step button{width:58px;min-height:58px;font-size:26px}
+.step input{width:72px;min-height:58px;font-size:20px}
+.step>span{font-size:17px}
+.trirow>span{font-size:18px}
+
+/* tuiles du sélecteur de scan (3 colonnes) : version compacte des icônes dessinées */
+.tiles3 .tile{min-height:104px;font-size:14px;gap:6px;padding:10px 4px}
+.tiles3 .tile .ti{width:54px;height:54px}
+.tiles3 .tile .ti svg{width:32px;height:32px}
+.tile.on{border-color:var(--c);box-shadow:0 0 0 3px var(--honey-l),var(--shadow)}
+
+/* grille des types d'intervention compacte : les boutons Reine/Pontes restent visibles sans défiler */
+.typegrid{grid-template-columns:repeat(4,1fr);gap:6px}
+.typegrid button{min-height:64px;padding:6px 2px;font-size:11.5px;border-radius:14px}
+.typegrid .ico{font-size:24px}
