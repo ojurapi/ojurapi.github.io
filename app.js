@@ -13,7 +13,7 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = fal
 
 /* ================= données ================= */
 const KEY = 'ruchier.v1';
-const EMPTY = () => ({ apiaries: [], hives: [], supers: [], queens: [], logs: [], tasks: [], seq: 1, lastBackup: 0 });
+const EMPTY = () => ({ apiaries: [], hives: [], supers: [], queens: [], logs: [], tasks: [], seq: 1, lastBackup: 0, homeOrder: null, homeHidden: null });
 let db = load();
 function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY) || 'null'); if (d && Array.isArray(d.hives)) return Object.assign(EMPTY(), d); } catch (e) { /* ignore */ }
@@ -135,7 +135,7 @@ function mapSvg(list) {
 }
 
 /* ================= vues ================= */
-const ui = { q: '', ap: '', st: '' };
+const ui = { q: '', ap: '', st: '', homeEdit: false };
 const VIEWS = {};
 const MODE_ICONS = { open: ['scan', '#a86f00'], visit: ['visit', '#2f7d4f'], queen: ['queen', '#8e44ad'], harvest: ['harvest', '#d99a1c'], move: ['move', '#2f5bea'], winter: ['winter', '#1b8fb3'], loss: ['loss', '#b42318'], todo: ['todo', '#e5702a'] };
 
@@ -160,29 +160,47 @@ const ICONS = {
   settings: '<circle cx="24" cy="24" r="7"/><path d="M24 5V11M24 37V43M5 24H11M37 24H43M10.6 10.6L14.8 14.8M33.2 33.2L37.4 37.4M10.6 37.4L14.8 33.2M33.2 14.8L37.4 10.6"/>',
   labels: '<rect x="7" y="7" width="13" height="13" rx="2"/><rect x="28" y="7" width="13" height="13" rx="2"/><rect x="7" y="28" width="13" height="13" rx="2"/><path d="M28 28H33V33H28ZM36 36H41V41H36ZM36 28H41M28 36V41"/>'
 };
+const TILE_DEFS = [
+  { k: 'open', kind: 'scan', icon: 'scan', label: 'Scanner', color: '#a86f00', target: 'open' },
+  { k: 'visit', kind: 'scan', icon: 'visit', label: 'Visite', color: '#2f7d4f', target: 'visit' },
+  { k: 'harvest', kind: 'scan', icon: 'harvest', label: 'Récolte', color: '#d99a1c', target: 'harvest' },
+  { k: 'queen', kind: 'scan', icon: 'queen', label: 'Reine', color: '#8e44ad', target: 'queen' },
+  { k: 'move', kind: 'scan', icon: 'move', label: 'Transhumer', color: '#2f5bea', target: 'move' },
+  { k: 'winter', kind: 'scan', icon: 'winter', label: 'Hivernage', color: '#1b8fb3', target: 'winter' },
+  { k: 'loss', kind: 'scan', icon: 'loss', label: 'Perte', color: '#b42318', target: 'loss' },
+  { k: 'todo', kind: 'scan', icon: 'todo', label: 'À faire', color: '#e5702a', target: 'todo' },
+  { k: 'hives', kind: 'nav', icon: 'hives', label: 'Ruches', color: '#a86f00', target: '#/ruches', badge: 'flag' },
+  { k: 'ruchers', kind: 'nav', icon: 'ruchers', label: 'Ruchers', color: '#3f8a4f', target: '#/ruchers' },
+  { k: 'tasks', kind: 'nav', icon: 'tasks', label: 'Tâches', color: '#5b6b7a', target: '#/taches', badge: 'tasks' },
+  { k: 'labels', kind: 'nav', icon: 'labels', label: 'Étiquettes', color: '#c2410c', target: '#/etiquettes' },
+  { k: 'supers', kind: 'nav', icon: 'supers', label: 'Hausses', color: '#0f766e', target: '#/hausses' },
+  { k: 'settings', kind: 'nav', icon: 'settings', label: 'Réglages', color: '#57534e', target: '#/plus' },
+  { k: 'queens', kind: 'nav', icon: 'queen', label: 'Reines & lignées', color: '#7c3aed', target: '#/reines' }
+];
+const DEFAULT_HIDDEN = ['queens'];
+function homeKeys() {
+  const all = TILE_DEFS.map(t => t.k), ord = (Array.isArray(db.homeOrder) ? db.homeOrder : []).filter((k, i, a) => all.includes(k) && a.indexOf(k) === i);
+  all.forEach(k => { if (!ord.includes(k)) ord.push(k); });
+  return ord;
+}
+const homeHidden = () => (Array.isArray(db.homeHidden) ? db.homeHidden : DEFAULT_HIDDEN);
+function tileInner(icon, label, badge) {
+  return '<span class="ti"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[icon] + '</svg>' + (badge ? '<b class="bdg">' + badge + '</b>' : '') + '</span><span>' + esc(label) + '</span>';
+}
 function tile(kind, key, label, color, target, badge) {
-  const inner = '<span class="ti"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[key] + '</svg>' + (badge ? '<b class="bdg">' + badge + '</b>' : '') + '</span><span>' + esc(label) + '</span>';
+  const inner = tileInner(key, label, badge);
   return kind === 'scan'
     ? '<button type="button" class="tile" style="--c:' + color + '" data-act="goScan" data-m="' + target + '">' + inner + '</button>'
     : '<a class="tile" style="--c:' + color + '" href="' + target + '">' + inner + '</a>';
 }
-function tilesHtml(flaggedCount, openTasks) {
-  return '<div class="tiles">' +
-    tile('scan', 'scan', 'Scanner', '#a86f00', 'open') +
-    tile('scan', 'visit', 'Visite', '#2f7d4f', 'visit') +
-    tile('scan', 'harvest', 'Récolte', '#d99a1c', 'harvest') +
-    tile('scan', 'queen', 'Reine', '#8e44ad', 'queen') +
-    tile('scan', 'move', 'Transhumer', '#2f5bea', 'move') +
-    tile('scan', 'winter', 'Hivernage', '#1b8fb3', 'winter') +
-    tile('scan', 'loss', 'Perte', '#b42318', 'loss') +
-    tile('scan', 'todo', 'À faire', '#e5702a', 'todo') +
-    tile('nav', 'hives', 'Ruches', '#a86f00', '#/ruches', flaggedCount) +
-    tile('nav', 'ruchers', 'Ruchers', '#3f8a4f', '#/ruchers') +
-    tile('nav', 'tasks', 'Tâches', '#5b6b7a', '#/taches', openTasks) +
-    tile('nav', 'labels', 'Étiquettes', '#c2410c', '#/etiquettes') +
-    tile('nav', 'supers', 'Hausses', '#0f766e', '#/hausses') +
-    tile('nav', 'settings', 'Réglages', '#57534e', '#/plus') +
-    '</div>';
+function tilesHtml(flaggedCount, openTasks, editing) {
+  const hidden = homeHidden();
+  const keys = homeKeys().filter(k => editing || !hidden.includes(k));
+  return '<div class="tiles' + (editing ? ' editing' : '') + '">' + keys.map(k => {
+    const t = TILE_DEFS.find(x => x.k === k), off = hidden.includes(k);
+    if (editing) return '<div class="tile edit' + (off ? ' off' : '') + '" data-key="' + k + '" style="--c:' + t.color + '"><span class="grip" title="Glisser pour déplacer">⠿</span><button type="button" class="tbtn" data-act="toggleTile" data-k="' + k + '" aria-label="' + (off ? 'Afficher' : 'Masquer') + '">' + (off ? '＋' : '✕') + '</button>' + tileInner(t.icon, t.label, 0) + '</div>';
+    return tile(t.kind, t.icon, t.label, t.color, t.target, t.badge === 'flag' ? flaggedCount : t.badge === 'tasks' ? openTasks : 0);
+  }).join('') + '</div>';
 }
 
 VIEWS.accueil = () => {
@@ -190,6 +208,7 @@ VIEWS.accueil = () => {
   const flagged = live.filter(h => h.flag).sort((a, b) => nat(a.code, b.code));
   const tasks = db.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9999') < (b.due || '9999') ? -1 : 1).slice(0, 5);
   const logs = db.logs.slice(-6).reverse();
+  if (ui.homeEdit) return { title: 'Personnaliser', html: '<p class="hint">Faites glisser la poignée ⠿ d’une tuile pour la déplacer. ✕ masque une tuile, ＋ la remet.</p>' + tilesHtml(0, 0, true) + '<div class="actions"><button class="primary" data-act="homeEditDone">✓ Terminé</button><button data-act="homeReset">Rétablir l’ordre d’origine</button></div>', actions: '<button data-act="homeEditDone">✓ Terminé</button>' };
   let html = '';
   if (!db.apiaries.length && !db.hives.length) {
     html += '<div class="card"><b>Bienvenue 🐝</b><ol><li>Créez un <a href="#/ruchers">rucher</a></li><li>Ajoutez vos <a href="#/ruches">ruches</a> (plusieurs d’un coup possible)</li><li>Imprimez les <a href="#/etiquettes">étiquettes QR</a> et collez-les</li><li>Scannez-les au rucher pour tout enregistrer</li></ol><p class="hint">Tout reste enregistré sur ce téléphone, rien n’est envoyé sur internet.</p></div>';
@@ -198,7 +217,7 @@ VIEWS.accueil = () => {
   html += '<h2>Ruches à surveiller</h2>' + (flagged.length ? flagged.map(hiveItem).join('') : '<div class="hint">Aucune ruche signalée. Activez ⚑ sur la fiche d’une ruche pour la retrouver ici.</div>');
   html += '<h2>Tâches à venir</h2>' + (tasks.length ? tasks.map(taskItem).join('') : '<div class="hint">Rien de prévu.</div>');
   if (logs.length) html += '<h2>Dernières interventions</h2>' + logs.map(l => { const h = H(l.hiveId); return '<div class="log"><b>' + (h ? 'Ruche ' + esc(h.code) : '—') + '</b> · ' + esc(l.type) + (l.note ? ' — ' + esc(l.note) : '') + ' <small>(' + fmtTime(l.ts) + ')</small>' + logDetail(l) + '</div>'; }).join('');
-  return { title: "O Jur'Api", html };
+  return { title: "O Jur'Api", html, actions: '<button data-act="homeEdit">✎ Personnaliser</button>' };
 };
 
 VIEWS.ruchers = () => {
@@ -472,16 +491,47 @@ function editHiveForm(h) {
     }
   });
 }
+function applyQueenChoice(h, el, v) {
+  const code = el.qnew_code.value.trim();
+  let q = null;
+  if (code) { if (queenByCode(code)) { toast('La reine « ' + code + ' » existe déjà : choisissez-la dans la liste'); return false; } }
+  else if (el.qpick.value) q = Q(el.qpick.value);
+  if (!code && !q) { toast('Choisissez une reine ou créez-en une'); return false; }
+  if (q) {
+    if (q.id === h.queenId) { toast('Cette reine est déjà dans la ruche'); return false; }
+    const other = db.hives.find(x => x.queenId === q.id && x.id !== h.id);
+    if (other) { toast('La reine ' + q.code + ' est déjà dans la ruche ' + other.code); return false; }
+  }
+  const created = !q;
+  if (created) { q = { id: uid(), code, year: parseInt(el.qnew_year.value, 10) || '', lineage: el.qnew_lineage.value.trim(), motherId: el.qnew_mother.value, note: '' }; db.queens.push(q); }
+  const prev = Q(h.queenId);
+  h.queenId = q.id;
+  addLog(h.id, v.type, (prev ? qLabel(prev) + ' → ' : 'Reine ') + qLabel(q) + (created ? ' (nouvelle reine)' : '') + (v.note ? '\n' + v.note : ''));
+  h.flag = v.flag; save(); render(true); toast(created ? 'Reine créée et placée dans la ruche' : 'Reine placée dans la ruche');
+  return true;
+}
 function logForm(h) {
   const tri = (name, label) => '<div class="trirow"><span>' + label + '</span><div class="tri" data-tri="' + name + '"><button type="button" data-v="ok">✓ OK</button><button type="button" data-v="ko">✕ KO</button></div><input type="hidden" name="' + name + '" value=""></div>';
   const typeTiles = '<label>Type d’intervention</label><div class="typegrid">' + LOGTYPES.map((t, i) => '<button type="button" class="' + (i === 0 ? 'on' : '') + '" data-type="' + t + '"><span class="ico">' + LOGICONS[t] + '</span>' + t + '</button>').join('') + '</div>';
-  const html = '<div id="lg-visite" class="lgbox">' + tri('reine', 'Reine') + tri('pontes', 'Pontes') + '</div>' +
+  const optsHtml = arr => arr.map(o => '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>').join('');
+  const curQ = Q(h.queenId);
+  const qbox = '<div id="lg-reine" class="lgbox" hidden>' +
+    '<div class="hint" style="margin:6px 0">' + (curQ ? 'Reine actuelle : <b>' + esc(qLabel(curQ)) + '</b>' : 'Aucune reine dans cette ruche') + '</div>' +
+    '<label>Reine existante</label><select name="qpick">' + optsHtml(queenOptions('— Choisir —').filter(o => o[0] !== h.queenId)) + '</select>' +
+    '<button type="button" class="block addq" data-qnew="1">＋ Créer une nouvelle reine</button>' +
+    '<div id="qnew" hidden><div class="hint">La nouvelle reine sera créée (elle apparaît dans « Reines & lignées ») puis placée dans cette ruche.</div>' +
+    '<label>Identifiant / nom</label><input name="qnew_code" autocomplete="off">' +
+    '<label>Année de naissance</label><input name="qnew_year" inputmode="numeric" value="' + new Date().getFullYear() + '">' +
+    '<label>Lignée / souche</label><input name="qnew_lineage" autocomplete="off">' +
+    '<label>Mère</label><select name="qnew_mother">' + optsHtml(queenOptions('— Inconnue —')) + '</select></div></div>';
+  const html = qbox + '<div id="lg-visite" class="lgbox">' + tri('reine', 'Reine') + tri('pontes', 'Pontes') + '</div>' +
     '<div id="lg-ajout" class="lgbox" hidden>' + AJOUTS.map(a => '<div class="step"><span>' + a[1] + '</span><button type="button" data-step="-1" data-for="' + a[0] + '">−</button><input name="aj_' + a[0] + '" type="number" min="0" max="99" value="0" inputmode="numeric"><button type="button" data-step="1" data-for="' + a[0] + '">+</button></div>').join('') + '</div>';
   form({
     title: 'Intervention · ruche ' + h.code,
     fields: [{ name: 'type', type: 'hidden', value: 'Visite' }, { type: 'html', html: typeTiles }, { type: 'html', html }, { name: 'note', label: 'Notes (couvain, réserves, comportement…)', type: 'textarea' }, { name: 'flag', label: '⚑ Marquer à surveiller', type: 'checkbox', value: h.flag }],
     onSubmit(v) {
       const el = $('#f').elements, data = {};
+      if (v.type === 'Changement de reine' || v.type === 'Reine') return applyQueenChoice(h, el, v);
       if (v.type === 'Visite') { if (el.reine.value) data.reine = el.reine.value; if (el.pontes.value) data.pontes = el.pontes.value; }
       if (v.type === 'Ajout') {
         const aj = {}; AJOUTS.forEach(a => { const n = parseInt(el['aj_' + a[0]].value, 10) || 0; if (n > 0) aj[a[0]] = Math.min(n, 99); });
@@ -492,7 +542,7 @@ function logForm(h) {
     }
   });
   const f = $('#f');
-  const sync = () => { const t = f.elements.type.value; $('#lg-visite').hidden = t !== 'Visite'; $('#lg-ajout').hidden = t !== 'Ajout'; };
+  const sync = () => { const t = f.elements.type.value; $('#lg-visite').hidden = t !== 'Visite'; $('#lg-ajout').hidden = t !== 'Ajout'; $('#lg-reine').hidden = !(t === 'Changement de reine' || t === 'Reine'); };
   sync();
   f.addEventListener('click', e => {
     const tt = e.target.closest('[data-type]');
@@ -504,6 +554,8 @@ function logForm(h) {
       g.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === inp.value));
       return;
     }
+    const nq = e.target.closest('[data-qnew]');
+    if (nq) { const b = $('#qnew'); b.hidden = !b.hidden; nq.textContent = b.hidden ? '＋ Créer une nouvelle reine' : '− Annuler la nouvelle reine'; if (b.hidden) f.elements.qnew_code.value = ''; else f.elements.qnew_code.focus(); return; }
     const sb = e.target.closest('[data-step]');
     if (sb) { const i = f.elements['aj_' + sb.dataset.for]; i.value = Math.max(0, Math.min(99, (parseInt(i.value, 10) || 0) + parseInt(sb.dataset.step, 10))); }
   });
@@ -715,6 +767,10 @@ const ACT = {
   wipe() { if (confirm("Effacer TOUTES les données de O Jur'Api sur ce téléphone ?") && confirm('Vraiment tout effacer ? Action irréversible.')) { db = EMPTY(); save(); render(true); toast('Données effacées'); } },
   install() { if (deferredInstall) { deferredInstall.prompt(); deferredInstall = null; } },
   scanMode(el) { const was = !!scan.stream; scan.mode = el.dataset.m; scan.target = ''; scan.pending = []; render(true); if (was) startCam(); },
+  homeEdit() { ui.homeEdit = true; render(false); },
+  homeEditDone() { ui.homeEdit = false; render(false); },
+  homeReset() { db.homeOrder = null; db.homeHidden = null; save(); render(true); toast('Ordre d’origine rétabli'); },
+  toggleTile(el) { const k = el.dataset.k, a = homeHidden().slice(), i = a.indexOf(k); if (i >= 0) a.splice(i, 1); else a.push(k); db.homeHidden = a; save(); render(true); },
   goScan(el) { scan.mode = el.dataset.m; scan.target = ''; scan.pending = []; scan.hive = ''; if (location.hash === '#/scan') render(false); else location.hash = '#/scan'; },
   scanReset() { scan.hive = ''; scan.pending = []; paintScan(); },
   camToggle() { if (scan.stream) stopCam(); else startCam(); },
@@ -748,6 +804,31 @@ window.addEventListener('afterprint', () => { const p = $('#printSheet'); p.hidd
 
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-window.Ruchier = { get db() { return db; }, ACT, handleScan, scan, render, EXPORTS, csvText, parseCode };
+/* glisser-déposer des tuiles (poignée ⠿, souris ou doigt) */
+let drag = null;
+document.addEventListener('pointerdown', e => {
+  const g = e.target.closest && e.target.closest('.tiles.editing .grip'); if (!g) return;
+  const t = g.closest('.tile'); drag = { t, box: t.parentNode }; t.classList.add('dragging');
+  try { g.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  e.preventDefault();
+});
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (e.clientY > window.innerHeight - 120) window.scrollBy(0, 14); else if (e.clientY < 130) window.scrollBy(0, -14);
+  const el = document.elementFromPoint ? document.elementFromPoint(e.clientX, e.clientY) : null, over = el && el.closest ? el.closest('.tile.edit') : null;
+  if (!over || over === drag.t || over.parentNode !== drag.box) return;
+  const kids = [...drag.box.children];
+  if (kids.indexOf(drag.t) < kids.indexOf(over)) over.after(drag.t); else over.before(drag.t);
+});
+function endDrag() {
+  if (!drag) return;
+  drag.t.classList.remove('dragging');
+  db.homeOrder = [...drag.box.querySelectorAll('.tile.edit')].map(x => x.dataset.key);
+  drag = null; save();
+}
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+
+window.Ruchier = { homeKeys, get db() { return db; }, ACT, handleScan, scan, render, EXPORTS, csvText, parseCode };
 render(false);
 })();
