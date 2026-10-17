@@ -93,14 +93,18 @@ function showQr(text, label) {
   const qr = qrcode(0, 'M'); qr.addData(text); qr.make();
   openSheet('<h3>' + esc(label) + '</h3><div style="text-align:center"><div class="qr">' + qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true }) + '</div><p class="hint">' + esc(text) + '</p></div><div class="btns"><button data-close>Fermer</button><button class="primary" data-act="printOne" data-text="' + esc(text) + '" data-label="' + esc(label) + '">Imprimer</button></div>');
 }
-function labelsHtml(items) {
-  return '<div class="labels">' + items.map(it => {
+const LAYOUTS = { 20: [4, 5], 15: [3, 5], 12: [3, 4], 10: [2, 5], 8: [2, 4], 6: [2, 3], 4: [2, 2], 2: [1, 2], 1: [1, 1] };
+function labelsHtml(items, per, preview) {
+  const lay = LAYOUTS[per] || LAYOUTS[20], n = lay[0] * lay[1], pages = [];
+  for (let i = 0; i < items.length; i += n) pages.push(items.slice(i, i + n));
+  return pages.map(pg => '<div class="labels" style="--cols:' + lay[0] + ';--rows:' + lay[1] + '"' + (preview ? ' data-prev="1"' : '') + '>' + pg.map(it => {
     const qr = qrcode(0, 'M'); qr.addData(it.text); qr.make();
     return '<div class="label">' + qr.createSvgTag({ cellSize: 4, margin: 1, scalable: true }) + '<div>' + esc(it.label) + '</div></div>';
-  }).join('') + '</div>';
+  }).join('') + '</div>').join('');
 }
-function printItems(items) {
-  const p = $('#printSheet'); p.innerHTML = labelsHtml(items); p.hidden = false;
+function labelPer() { try { return parseInt(localStorage.getItem('ojurapi.labelPer'), 10) || 20; } catch (e) { return 20; } }
+function printItems(items, per) {
+  const p = $('#printSheet'); p.innerHTML = labelsHtml(items, per || labelPer()); p.hidden = false;
   setTimeout(() => { window.print(); }, 80);
 }
 
@@ -315,7 +319,7 @@ VIEWS.hausses = () => {
 };
 
 VIEWS.etiquettes = () => {
-  const html = '<div class="card"><label>Type</label><select id="lt"><option value="H">Ruches</option><option value="S">Hausses</option></select><div class="grid"><div><label>Du numéro</label><input id="l1" type="number" min="1" value="1" inputmode="numeric"></div><div><label>Au numéro</label><input id="l2" type="number" min="1" value="12" inputmode="numeric"></div></div><div class="actions"><button class="primary" data-act="makeLabels">Générer</button></div><p class="hint">Imprimez (ou « Enregistrer en PDF »), plastifiez, collez sur la ruche ou la hausse. Maximum 200 étiquettes à la fois.</p></div><div id="lprev"></div>';
+  const html = '<div class="card"><label>Type</label><select id="lt"><option value="H">Ruches</option><option value="S">Hausses</option></select><div class="grid"><div><label>Du numéro</label><input id="l1" type="number" min="1" value="1" inputmode="numeric"></div><div><label>Au numéro</label><input id="l2" type="number" min="1" value="12" inputmode="numeric"></div></div><label>Étiquettes par feuille A4 (moins = plus grosses)</label><select id="lper">'+[20,15,12,10,8,6,4,2,1].map(n=>'<option value="'+n+'"'+(labelPer()===n?' selected':'')+'>'+n+(n===20?' (petites)':n===1?' (plein page)':'')+'</option>').join('')+'</select><div class="actions"><button class="primary" data-act="makeLabels">Générer</button></div><p class="hint">Imprimez (ou « Enregistrer en PDF »), plastifiez, collez sur la ruche ou la hausse. Maximum 200 étiquettes à la fois.</p></div><div id="lprev"></div>';
   return { title: 'Étiquettes QR', back: '#/plus', html };
 };
 
@@ -800,10 +804,10 @@ const ACT = {
     if (!(a >= 1) || !(b >= a)) { toast('Plage invalide'); return; }
     if (b - a + 1 > 200) { toast('Maximum 200 étiquettes'); return; }
     const items = []; for (let i = a; i <= b; i++) items.push({ text: 'RCH:' + type + ':' + i, label: (type === 'H' ? 'Ruche ' : 'Hausse ') + i });
-    window.__labels = items;
-    $('#lprev').innerHTML = '<div class="actions"><button class="primary" data-act="printLabels">Imprimer / PDF (' + items.length + ')</button></div>' + labelsHtml(items.slice(0, 8)).replace('class="labels"', 'class="labels" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"') + (items.length > 8 ? '<p class="hint">Aperçu des 8 premières.</p>' : '');
+    window.__labels = items; const per = parseInt($('#lper').value, 10) || 20; try { localStorage.setItem('ojurapi.labelPer', per); } catch (e) {}
+    $('#lprev').innerHTML = '<div class="actions"><button class="primary" data-act="printLabels">Imprimer / PDF (' + items.length + ')</button></div>' + labelsHtml(items.slice(0, Math.min(per, 6)), per, true) + '<p class="hint">Aperçu' + (items.length > 6 ? ' des premières étiquettes' : '') + ' — ' + per + ' par feuille A4, ' + Math.ceil(items.length / per) + ' feuille(s).</p>';
   },
-  printLabels() { printItems(window.__labels || []); },
+  printLabels() { printItems(window.__labels || [], parseInt($('#lper') && $('#lper').value, 10) || labelPer()); },
   exportCsv(el) { const k = el.dataset.k; saveFile(k + '.csv', csvText(EXPORTS[k]()), 'text/csv'); },
   backup() { db.lastBackup = Date.now(); save(); saveFile('ojurapi-sauvegarde-' + today() + '.json', JSON.stringify(db), 'application/json'); render(true); },
   importPick() { $('#imp').click(); },
