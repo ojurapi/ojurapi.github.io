@@ -176,3 +176,14 @@ svg.map{width:100%;height:auto;background:var(--card);border:1px solid var(--lin
 .tile.dragging{transform:scale(1.05);box-shadow:0 12px 26px rgba(0,0,0,.28);z-index:5;border-style:solid}
 /* intervention : création de reine */
 .addq{min-height:58px;font-size:18px;margin:12px 0 6px;border:2px dashed var(--honey);background:var(--honey-l);color:var(--ink)}
+
+/* opérations à faire en orange */
+.log.todo,.log.todo b,.tl .e.todo,.tl .e.todo b,.tl .e.todo small{color:#e5702a}
+.tl .e.todo{border-left:3px solid #e5702a;padding-left:8px}
+/* lot de ruches scannées */
+.batch{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--honey-l);border-radius:16px;padding:4px 4px 4px 12px;font-weight:600}
+.chip button{border:0;background:transparent;font-size:16px;padding:2px 8px;color:var(--mute)}
+.feedrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.feedrow .chk{flex:1}
