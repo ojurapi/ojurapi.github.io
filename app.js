@@ -99,7 +99,7 @@ function labelsHtml(items, per, preview) {
   for (let i = 0; i < items.length; i += n) pages.push(items.slice(i, i + n));
   return pages.map(pg => '<div class="labels" style="--cols:' + lay[0] + ';--rows:' + lay[1] + '"' + (preview ? ' data-prev="1"' : '') + '>' + pg.map(it => {
     const qr = qrcode(0, 'M'); qr.addData(it.text); qr.make();
-    return '<div class="label">' + qr.createSvgTag({ cellSize: 4, margin: 1, scalable: true }) + '<div>' + esc(it.label) + '</div></div>';
+    return '<div class="label"><div class="qrw">' + qr.createSvgTag({ cellSize: 4, margin: 1, scalable: true }) + '</div><div class="lt">' + esc(it.label) + '</div></div>';
   }).join('') + '</div>').join('');
 }
 function labelPer() { try { return parseInt(localStorage.getItem('ojurapi.labelPer'), 10) || 20; } catch (e) { return 20; } }
