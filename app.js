@@ -371,9 +371,11 @@ VIEWS.scan = () => {
   let ctx = '';
   if (scan.mode === 'queen') ctx = '<label>Reine</label><select id="scanTarget">' + queenOptions('— Choisir —').map(o => '<option value="' + esc(o[0]) + '"' + (scan.target === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
   if (scan.mode === 'winter') ctx = '<label>Action</label><select id="scanAct"><option value="in"' + (scan.wact === 'in' ? ' selected' : '') + '>Hivernage</option><option value="out"' + (scan.wact === 'out' ? ' selected' : '') + '>Sortie d’hivernage</option></select><label>' + (scan.wact === 'out' ? 'Rucher d’arrivée (facultatif)' : 'Rucher d’hivernage') + '</label><select id="scanTarget">' + apiaryOptions(scan.wact === 'out' ? '— Inchangé —' : '— Choisir —').map(o => '<option value="' + esc(o[0]) + '"' + (scan.target === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
-  const html = '<div class="tiles tiles3">' + MODES.map(m => '<button class="tile ' + (scan.mode === m[0] ? 'on' : '') + '" data-act="scanMode" data-m="' + m[0] + '" style="--c:' + MODE_ICONS[m[0]][1] + '"><span class="ti"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[MODE_ICONS[m[0]][0]] + '</svg></span>' + m[1] + '</button>').join('') + '</div><p class="hint">' + MODE_HELP[scan.mode] + '</p>' + ctx +
+  const modeName = (MODES.find(m => m[0] === scan.mode) || ['', ''])[1];
+  const tilesH = '<h2>Choisir l’action</h2><div class="tiles tiles3">' + MODES.map(m => '<button class="tile ' + (scan.mode === m[0] ? 'on' : '') + '" data-act="scanMode" data-m="' + m[0] + '" style="--c:' + MODE_ICONS[m[0]][1] + '"><span class="ti"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[MODE_ICONS[m[0]][0]] + '</svg></span>' + m[1] + '</button>').join('') + '</div>';
+  const html = '<div class="modebar"><b>' + esc(modeName) + '</b></div><p class="hint">' + MODE_HELP[scan.mode] + '</p>' + ctx +
     '<div id="scanCtx" class="hint"></div><div class="video" style="margin-top:10px"><video id="cam" playsinline muted></video><div class="aim"></div></div><div class="actions"><button class="primary" id="camBtn" data-act="camToggle">Activer la caméra</button></div>' +
-    '<label>Ou saisissez le numéro (12 = ruche, S12 = hausse, Q3 = reine)</label><div class="row"><input id="manual" inputmode="text" placeholder="12" autocomplete="off"><button data-act="manualGo">OK</button></div><h2>Historique</h2><div id="scanLog"></div>';
+    '<label>Ou saisissez le numéro (12 = ruche, S12 = hausse, Q3 = reine)</label><div class="row"><input id="manual" inputmode="text" placeholder="12" autocomplete="off"><button data-act="manualGo">OK</button></div>' + tilesH + '<h2>Historique</h2><div id="scanLog"></div>';
   return {
     title: 'Scanner', html,
     after() {
@@ -898,7 +900,7 @@ const ACT = {
   importPick() { $('#imp').click(); },
   wipe() { if (confirm("Effacer TOUTES les données de O Jur'Api sur ce téléphone ?") && confirm('Vraiment tout effacer ? Action irréversible.')) { db = EMPTY(); save(); render(true); toast('Données effacées'); } },
   install() { if (deferredInstall) { deferredInstall.prompt(); deferredInstall = null; } },
-  scanMode(el) { scan.mode = el.dataset.m; scan.target = ''; scan.pending = []; scan.batch = []; render(true); },
+  scanMode(el) { scan.mode = el.dataset.m; scan.target = ''; scan.pending = []; scan.batch = []; render(false); },
   homeEdit() { ui.homeEdit = true; render(false); },
   homeEditDone() { ui.homeEdit = false; render(false); },
   homeReset() { db.homeOrder = null; db.homeHidden = null; save(); render(true); toast('Ordre d’origine rétabli'); },
