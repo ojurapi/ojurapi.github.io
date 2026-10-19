@@ -13,7 +13,7 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = fal
 
 /* ================= données ================= */
 const KEY = 'ruchier.v1';
-const EMPTY = () => ({ apiaries: [], hives: [], supers: [], queens: [], logs: [], tasks: [], feeds: [{ id: 'f1', name: 'Sirop 50/50' }, { id: 'f2', name: 'Sirop 70/30' }, { id: 'f3', name: 'Candi' }, { id: 'f4', name: 'Pâte protéinée' }], seq: 1, lastBackup: 0, homeOrder: null, homeHidden: null });
+const EMPTY = () => ({ apiaries: [], hives: [], supers: [], queens: [], logs: [], tasks: [], feeds: [{ id: 'f1', name: 'Sirop 50/50' }, { id: 'f2', name: 'Sirop 70/30' }, { id: 'f3', name: 'Candi' }, { id: 'f4', name: 'Pâte protéinée' }], treatments: [{ id: 't1', name: 'Dégouttement' }, { id: 't2', name: 'Lange A/O' }, { id: 't3', name: 'Sublimation' }], seq: 1, lastBackup: 0, homeOrder: null, homeHidden: null });
 let db = load();
 function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY) || 'null'); if (d && Array.isArray(d.hives)) { const r = Object.assign(EMPTY(), d); (r.feeds || []).forEach(f => { if (f.name === 'Sirop 3:2') f.name = 'Sirop 70/30'; }); return r; } } catch (e) { /* ignore */ }
@@ -39,8 +39,12 @@ const LOGTYPES = ['Visite', 'Ajout', 'Changement de reine', 'Perte', 'Nourrissem
 
 const LOGICONS = { 'Sortie d’hivernage': '🌤️', 'Visite': '👀', 'Ajout': '➕', 'Changement de reine': '👑', 'Perte': '✖️', 'Nourrissement': '🥣', 'Traitement': '💊', 'Pose de hausse': '📦', 'Division / essaim': '🔀', 'Reine': '👑', 'Récolte': '🍯', 'Transhumance': '🚚', 'Hivernage': '❄️', 'Autre': '⋯' };
 const AJOUTS = [['gaufre', 'Cadre gaufré', 'Cadres gaufrés'], ['construit', 'Cadre construit', 'Cadres construits'], ['males', 'Cadre à mâles', 'Cadres à mâles'], ['partition', 'Partition', 'Partitions']];
-function addLog(hiveId, type, note, data) {
-  const l = { id: uid(), ts: Date.now(), hiveId, type, note: note || '' };
+const pad2 = n => String(n).padStart(2, '0');
+const toLocalInput = ts => { const d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); };
+const fromLocalInput = x => { const t = x ? new Date(x).getTime() : NaN; return Number.isFinite(t) ? t : Date.now(); };
+const whenField = ts => ({ name: 'when', label: 'Date et heure', type: 'datetime-local', value: toLocalInput(ts || Date.now()) });
+function addLog(hiveId, type, note, data, ts) {
+  const l = { id: uid(), ts: ts || Date.now(), hiveId, type, note: note || '' };
   if (data) l.data = data;
   db.logs.push(l);
 }
@@ -145,7 +149,7 @@ function mapSvg(list) {
 /* ================= vues ================= */
 const ui = { q: '', ap: '', st: '', homeEdit: false };
 const VIEWS = {};
-const MODE_ICONS = { open: ['scan', '#a86f00'], visit: ['visit', '#2f7d4f'], queen: ['queen', '#8e44ad'], harvest: ['harvest', '#d99a1c'], move: ['move', '#2f5bea'], winter: ['winter', '#1b8fb3'], feed: ['feed', '#0e9f6e'], loss: ['loss', '#b42318'], todo: ['todo', '#e5702a'] };
+const MODE_ICONS = { open: ['scan', '#a86f00'], visit: ['visit', '#2f7d4f'], queen: ['queen', '#8e44ad'], harvest: ['harvest', '#d99a1c'], move: ['move', '#2f5bea'], winter: ['winter', '#1b8fb3'], feed: ['feed', '#0e9f6e'], treat: ['treat', '#be185d'], loss: ['loss', '#b42318'], todo: ['todo', '#e5702a'] };
 
 /* ================= couleurs de ruchers, icônes et tuiles ================= */
 const ACOLORS = [['', 'Aucune'], ['red', 'Rouge'], ['green', 'Vert'], ['yellow', 'Jaune'], ['blue', 'Bleu']];
@@ -169,6 +173,8 @@ const ICONS = {
   settings: '<circle cx="24" cy="24" r="7"/><path d="M24 5V11M24 37V43M5 24H11M37 24H43M10.6 10.6L14.8 14.8M33.2 33.2L37.4 37.4M10.6 37.4L14.8 33.2M33.2 14.8L37.4 10.6"/>',
   labels: '<rect x="7" y="7" width="13" height="13" rx="2"/><rect x="28" y="7" width="13" height="13" rx="2"/><rect x="7" y="28" width="13" height="13" rx="2"/><path d="M28 28H33V33H28ZM36 36H41V41H36ZM36 28H41M28 36V41"/>'
 };
+ICONS.treat = '<path d="M32 6L42 16M37 11L20 28V34H26L43 17"/><path d="M20 34L12 42"/><path d="M10 18C10 18 5.5 23.5 5.5 27a4.5 4.5 0 0 0 9 0C14.5 23.5 10 18 10 18Z"/>';
+LOGICONS['Pose de hausse'] = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 18H41V37a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3Z"/><path d="M7 18L10.5 9H37.5L41 18"/><path d="M16 24V34M24 24V34M32 24V34"/></svg>';
 const TILE_DEFS = [
   { k: 'open', kind: 'scan', icon: 'scan', label: 'Scanner', color: '#a86f00', target: 'open' },
   { k: 'visit', kind: 'scan', icon: 'visit', label: 'Visite', color: '#2f7d4f', target: 'visit' },
@@ -177,6 +183,7 @@ const TILE_DEFS = [
   { k: 'move', kind: 'scan', icon: 'move', label: 'Transhumer', color: '#2f5bea', target: 'move' },
   { k: 'winter', kind: 'scan', icon: 'winter', label: 'Hivernage', color: '#1b8fb3', target: 'winter' },
   { k: 'feed', kind: 'scan', icon: 'feed', label: 'Nourrissement', color: '#0e9f6e', target: 'feed' },
+  { k: 'treat', kind: 'scan', icon: 'treat', label: 'Traitement', color: '#be185d', target: 'treat' },
   { k: 'loss', kind: 'scan', icon: 'loss', label: 'Perte', color: '#b42318', target: 'loss' },
   { k: 'todo', kind: 'scan', icon: 'todo', label: 'À faire', color: '#e5702a', target: 'todo' },
   { k: 'hives', kind: 'nav', icon: 'hives', label: 'Ruches', color: '#a86f00', target: '#/ruches', badge: 'flag' },
@@ -217,7 +224,7 @@ VIEWS.accueil = () => {
   const live = db.hives.filter(h => h.status !== 'morte' && h.status !== 'vendue');
   const flagged = live.filter(h => h.flag).sort((a, b) => nat(a.code, b.code));
   const tasks = db.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9999') < (b.due || '9999') ? -1 : 1).slice(0, 5);
-  const logs = db.logs.slice(-6).reverse();
+  const logs = db.logs.slice().sort((a, b) => b.ts - a.ts).slice(0, 6);
   if (ui.homeEdit) return { title: 'Personnaliser', html: '<p class="hint">Faites glisser la poignée ⠿ d’une tuile pour la déplacer. ✕ masque une tuile, ＋ la remet.</p>' + tilesHtml(0, 0, true) + '<div class="actions"><button class="primary" data-act="homeEditDone">✓ Terminé</button><button data-act="homeReset">Rétablir l’ordre d’origine</button></div>', actions: '<button data-act="homeEditDone">✓ Terminé</button>' };
   let html = '';
   if (!db.apiaries.length && !db.hives.length) {
@@ -226,7 +233,7 @@ VIEWS.accueil = () => {
   html += tilesHtml(flagged.length, db.tasks.filter(t => !t.done).length);
   html += '<h2>Ruches à surveiller</h2>' + (flagged.length ? flagged.map(hiveItem).join('') : '<div class="hint">Aucune ruche signalée. Activez ⚑ sur la fiche d’une ruche pour la retrouver ici.</div>');
   html += '<h2>Tâches à venir</h2>' + (tasks.length ? tasks.map(taskItem).join('') : '<div class="hint">Rien de prévu.</div>');
-  if (logs.length) html += '<h2>Dernières interventions</h2>' + logs.map(l => { const h = H(l.hiveId); return '<div class="log' + (isTodo(l) ? ' todo' : '') + '"><b>' + (h ? 'Ruche ' + esc(h.code) : '—') + '</b> · ' + esc(l.type) + (l.note ? ' — ' + esc(l.note) : '') + ' <small>(' + fmtTime(l.ts) + ')</small>' + logDetail(l) + '</div>'; }).join('');
+  if (logs.length) html += '<h2>Dernières interventions</h2>' + logs.map(l => { const h = H(l.hiveId); return '<div class="log edl' + (isTodo(l) ? ' todo' : '') + '" data-act="editLog" data-id="' + l.id + '"><b>' + (h ? 'Ruche ' + esc(h.code) : '—') + '</b> · ' + esc(l.type) + (l.note ? ' — ' + esc(l.note) : '') + ' <small>(' + fmtTime(l.ts) + ')</small>' + logDetail(l) + '</div>'; }).join('');
   return { title: "O Jur'Api", html, actions: '<button data-act="homeEdit">✎ Personnaliser</button>' };
 };
 
@@ -290,7 +297,8 @@ VIEWS.ruche = id => {
   html += '</div><div class="actions"><button class="primary small" data-act="addLog" data-id="' + h.id + '">+ Intervention</button><button class="small" data-act="toggleFlag" data-id="' + h.id + '">' + (h.flag ? '⚐ Retirer le signal' : '⚑ À surveiller') + '</button><button class="small" data-act="moveHive" data-id="' + h.id + '">Déplacer</button><button class="small" data-act="hiveQr" data-id="' + h.id + '">QR</button><button class="small" data-act="editHive" data-id="' + h.id + '">Modifier</button><button class="small danger" data-act="delHive" data-id="' + h.id + '">Supprimer</button></div>';
   html += '<h2>Hausses (' + supers.length + ')</h2>' + (supers.length ? supers.map(s => '<div class="item"><div class="grow"><div class="t">Hausse ' + esc(s.code) + '</div><div class="s">' + (s.since ? 'depuis le ' + fmtDate(s.since) : '') + '</div></div><button class="small" data-act="unlinkSuper" data-id="' + s.id + '">Retirer</button></div>').join('') : '<div class="hint">Aucune hausse.</div>');
   html += '<div class="actions"><button class="small" data-act="addSuperTo" data-id="' + h.id + '">+ Ajouter une hausse</button></div>';
-  html += '<h2>Journal</h2>' + (logs.length ? '<div class="tl">' + logs.map(l => '<div class="e' + (isTodo(l) ? ' todo' : '') + '"><b>' + esc(l.type) + '</b> <small>' + fmtTime(l.ts) + '</small>' + logDetail(l) + (l.note ? '<div>' + esc(l.note).replace(/\n/g, '<br>') + '</div>' : '') + '</div>').join('') + '</div>' : '<div class="hint">Aucune intervention enregistrée.</div>');
+  html += '<h2>Journal</h2>' + (logs.length ? '<div class="tl">' + logs.map(l => '<div class="e edl' + (isTodo(l) ? ' todo' : '') + '" data-act="editLog" data-id="' + l.id + '"><b>' + esc(l.type) + '</b> <small>' + fmtTime(l.ts) + '</small>' + logDetail(l) + (l.note ? '<div>' + esc(l.note).replace(/\n/g, '<br>') + '</div>' : '') + '</div>').join('') + '</div>' : '<div class="hint">Aucune intervention enregistrée.</div>');
+  if (logs.length) html += '<p class="hint">Touchez une ligne pour modifier sa date, son heure ou sa note.</p>';
   return { title: hn(h), back: '#/ruches', html };
 };
 
@@ -346,13 +354,14 @@ VIEWS.plus = () => {
 
 /* ---- scan ---- */
 const scan = { wact: 'in', manualOff: false, mode: 'open', target: '', hive: '', pending: [], batch: [], last: '', lastT: 0, log: [], stream: null, timer: null, canvas: null };
-const MODES = [['open', 'Fiche'], ['visit', 'Visite'], ['queen', 'Reine'], ['harvest', 'Récolte'], ['move', 'Transhumance'], ['winter', 'Hivernage'], ['feed', 'Nourrir'], ['loss', 'Perte'], ['todo', 'À faire']];
+const MODES = [['open', 'Fiche'], ['visit', 'Visite'], ['queen', 'Reine'], ['harvest', 'Récolte'], ['move', 'Transhumance'], ['winter', 'Hivernage'], ['feed', 'Nourrir'], ['treat', 'Traitement'], ['loss', 'Perte'], ['todo', 'À faire']];
 const MODE_HELP = {
   open: 'Scannez le QR d’une ruche pour ouvrir sa fiche.',
   queen: 'Choisissez (ou scannez) une reine, puis scannez les ruches qui la contiennent.',
   harvest: 'Scannez la ruche, puis chaque hausse récoltée : elles sont reliées à cette ruche.',
   move: 'Scannez toutes les ruches à déplacer, appuyez sur « Valider », puis choisissez le rucher de destination.',
   feed: 'Scannez toutes les ruches nourries, appuyez sur « Valider », puis choisissez le(s) nourrissement(s).',
+  treat: 'Scannez toutes les ruches traitées, appuyez sur « Valider », puis choisissez le(s) traitement(s) (ou créez-en un).',
   winter: 'Choisissez « Hivernage » (avec le rucher d’hivernage) ou « Sortie d’hivernage » (rucher d’arrivée facultatif), puis scannez chaque ruche.',
   visit: 'Scannez une ruche : le formulaire d’intervention s’ouvre (reine OK/KO, pontes OK/KO, ajouts de cadres).',
   loss: 'Scannez chaque ruche perdue. Une ruche en hivernage est notée « morte en hivernage ».',
@@ -381,7 +390,7 @@ function paintScan() {
   l.innerHTML = scan.log.length ? scan.log.map(x => '<div class="log">' + (x.warn ? '⚠ ' : '✓ ') + esc(x.msg) + '</div>').join('') : '<div class="hint">Rien de scanné pour l’instant.</div>';
   const c = $('#scanCtx');
   if (c) {
-    if (scan.mode === 'harvest') { const h = H(scan.hive); c.innerHTML = 'Ruche courante : <b>' + (h ? h.code : '—') + '</b>' + (scan.pending.length ? ' · ' + scan.pending.length + ' hausse(s) en attente' : '') + ' <button class="small" data-act="scanReset">Réinitialiser</button>'; } else if (scan.mode === 'move' || scan.mode === 'feed') c.innerHTML = batchHtml(); else c.innerHTML = '';
+    if (scan.mode === 'harvest') { const h = H(scan.hive); c.innerHTML = 'Ruche courante : <b>' + (h ? h.code : '—') + '</b>' + (scan.pending.length ? ' · ' + scan.pending.length + ' hausse(s) en attente' : '') + ' <button class="small" data-act="scanReset">Réinitialiser</button>'; } else if (scan.mode === 'move' || scan.mode === 'feed' || scan.mode === 'treat') c.innerHTML = batchHtml(); else c.innerHTML = '';
   }
 }
 function batchHtml() {
@@ -395,33 +404,62 @@ function moveBatchForm() {
   const hs = batchHives(); if (!hs.length) { toast('Scannez d’abord des ruches'); return; }
   form({
     title: 'Déplacer ' + hs.length + ' ruche' + (hs.length > 1 ? 's' : ''), submit: 'Déplacer',
-    fields: [{ type: 'html', html: '<div class="hint">Ruches : ' + hs.map(h => esc(h.code)).join(', ') + '</div>' }, { name: 'apiaryId', label: 'Vers quel emplacement (rucher) ?', type: 'select', options: apiaryOptions('— Choisir —'), value: '' }],
+    fields: [{ type: 'html', html: '<div class="hint">Ruches : ' + hs.map(h => esc(h.code)).join(', ') + '</div>' }, whenField(), { name: 'apiaryId', label: 'Vers quel emplacement (rucher) ?', type: 'select', options: apiaryOptions('— Choisir —'), value: '' }],
     onSubmit(v) {
       const a = A(v.apiaryId); if (!a) { toast('Choisissez le rucher de destination'); return false; }
-      hs.forEach(h => { h.apiaryId = a.id; if (h.status === 'hivernage') h.status = 'active'; addLog(h.id, 'Transhumance', 'Déplacée vers ' + a.name); });
+      hs.forEach(h => { h.apiaryId = a.id; if (h.status === 'hivernage') h.status = 'active'; addLog(h.id, 'Transhumance', 'Déplacée vers ' + a.name, null, fromLocalInput(v.when)); });
       scan.batch = []; scanLog(hs.length + ' ruche' + (hs.length > 1 ? 's' : '') + ' → ' + a.name); save(); paintScan();
     }
   });
 }
-function feedBatchForm(st) {
-  const hs = batchHives(); if (!hs.length) { toast('Scannez d’abord des ruches'); return; }
-  st = st || {}; db.feeds = db.feeds || []; const chk = st.checked || [];
-  const list = db.feeds.length ? db.feeds.map(f => '<div class="feedrow"><label class="chk"><input type="checkbox" name="feed_' + f.id + '"' + (chk.includes(f.id) ? ' checked' : '') + '> ' + esc(f.name) + '</label><button type="button" class="small danger" data-act="feedDel" data-id="' + f.id + '" aria-label="Supprimer ce nourrissement">🗑</button></div>').join('') : '<div class="hint">Aucun nourrissement : créez-en un ci-dessous.</div>';
+const PRODS = {
+  feed: { list: 'feeds', type: 'Nourrissement', pre: 'feed_', nw: 'newfeed', noun: 'nourrissement', given: 'Nourrissement(s) donné(s)', ph: 'ex. Sirop 1:1, Nourrisseur Boardman', key: 'feeds', delAct: 'feedDel', newAct: 'feedNew', done: 'nourrie' },
+  treat: { list: 'treatments', type: 'Traitement', pre: 'trt_', nw: 'newtrt', noun: 'traitement', given: 'Traitement(s) appliqué(s)', ph: 'ex. Acide formique, Apivar', key: 'treatments', delAct: 'trtDel', newAct: 'trtNew', done: 'traitée' }
+};
+function prodNames(k, el, create) {
+  const c = PRODS[k]; db[c.list] = db[c.list] || [];
+  const names = db[c.list].filter(f => el[c.pre + f.id] && el[c.pre + f.id].checked).map(f => f.name);
+  const nn = el[c.nw] ? el[c.nw].value.trim() : '';
+  if (nn && create) {
+    let ex = db[c.list].find(f => f.name.toLowerCase() === nn.toLowerCase());
+    if (!ex) { ex = { id: uid(), name: nn }; db[c.list].push(ex); }
+    if (!names.includes(ex.name)) names.push(ex.name);
+  }
+  return names;
+}
+function prodBatchForm(k, st) {
+  const c = PRODS[k], hs = batchHives(); if (!hs.length) { toast('Scannez d’abord des ruches'); return; }
+  st = st || {}; db[c.list] = db[c.list] || []; const chk = st.checked || [];
+  const list = db[c.list].length ? db[c.list].map(f => '<div class="feedrow"><label class="chk"><input type="checkbox" name="' + c.pre + f.id + '"' + (chk.includes(f.id) ? ' checked' : '') + '> ' + esc(f.name) + '</label><button type="button" class="small danger" data-act="' + c.delAct + '" data-id="' + f.id + '" aria-label="Supprimer de la liste">🗑</button></div>').join('') : '<div class="hint">Aucun ' + c.noun + ' : créez-en un ci-dessous.</div>';
   form({
-    title: 'Nourrissement · ' + hs.length + ' ruche' + (hs.length > 1 ? 's' : ''), submit: 'Enregistrer',
-    fields: [{ type: 'html', html: '<div class="hint">Ruches : ' + hs.map(h => esc(h.code)).join(', ') + '</div><label>Nourrissement(s) donné(s)</label><div class="feedlist">' + list + '</div><label>Créer un nouveau nourrissement</label><div class="row"><input name="newfeed" placeholder="ex. Sirop 1:1, Nourrisseur Boardman" autocomplete="off"><button type="button" data-act="feedNew">＋ Créer</button></div>' },
+    title: c.type + ' · ' + hs.length + ' ruche' + (hs.length > 1 ? 's' : ''), submit: 'Enregistrer',
+    fields: [{ type: 'html', html: '<div class="hint">Ruches : ' + hs.map(h => esc(h.code)).join(', ') + '</div><label>' + c.given + '</label><div class="feedlist">' + list + '</div><label>Créer un nouveau ' + c.noun + '</label><div class="row"><input name="' + c.nw + '" placeholder="' + esc(c.ph) + '" autocomplete="off"><button type="button" data-act="' + c.newAct + '">＋ Créer</button></div>' },
+      whenField(st.when ? fromLocalInput(st.when) : 0),
       { name: 'qty', label: 'Quantité par ruche (facultatif, ex. 2 L, 500 g)', value: st.qty || '' }, { name: 'note', label: 'Note', type: 'textarea', value: st.note || '' }],
     onSubmit(v) {
-      const names = db.feeds.filter(f => $('#f').elements['feed_' + f.id] && $('#f').elements['feed_' + f.id].checked).map(f => f.name);
-      if (!names.length) { toast('Choisissez au moins un nourrissement'); return false; }
-      hs.forEach(h => addLog(h.id, 'Nourrissement', names.join(' + ') + (v.qty ? ' — ' + v.qty : '') + (v.note ? '\n' + v.note : ''), { feeds: names, qty: v.qty }));
-      scan.batch = []; scanLog(hs.length + ' ruche' + (hs.length > 1 ? 's' : '') + ' nourrie' + (hs.length > 1 ? 's' : '') + ' : ' + names.join(' + ')); save(); paintScan();
+      const names = prodNames(k, $('#f').elements, false);
+      if (!names.length) { toast('Choisissez au moins un ' + c.noun); return false; }
+      const ts = fromLocalInput(v.when);
+      hs.forEach(h => addLog(h.id, c.type, names.join(' + ') + (v.qty ? ' — ' + v.qty : '') + (v.note ? '\n' + v.note : ''), { [c.key]: names, qty: v.qty }, ts));
+      scan.batch = []; scanLog(hs.length + ' ruche' + (hs.length > 1 ? 's' : '') + ' ' + c.done + (hs.length > 1 ? 's' : '') + ' : ' + names.join(' + ')); save(); paintScan();
     }
   });
-  const nf = $('#f').elements.newfeed; if (nf) nf.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); ACT.feedNew(); } };
+  const nf = $('#f').elements[c.nw]; if (nf) nf.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); ACT[c.newAct](); } };
 }
-function feedState() {
-  const el = $('#f').elements; return { checked: (db.feeds || []).filter(f => el['feed_' + f.id] && el['feed_' + f.id].checked).map(f => f.id), qty: el.qty.value, note: el.note.value };
+function prodState(k) {
+  const c = PRODS[k], el = $('#f').elements; return { checked: (db[c.list] || []).filter(f => el[c.pre + f.id] && el[c.pre + f.id].checked).map(f => f.id), qty: el.qty.value, note: el.note.value, when: el.when.value };
+}
+function prodNew(k) {
+  const c = PRODS[k], st = prodState(k), name = $('#f').elements[c.nw].value.trim();
+  if (!name) { toast('Écrivez le nom du ' + c.noun); return; }
+  db[c.list] = db[c.list] || [];
+  if (db[c.list].some(f => f.name.toLowerCase() === name.toLowerCase())) { toast('Ce ' + c.noun + ' existe déjà'); return; }
+  const f = { id: uid(), name }; db[c.list].push(f); st.checked.push(f.id); save(); prodBatchForm(k, st);
+}
+function prodDel(k, el) {
+  const c = PRODS[k], st = prodState(k), f = (db[c.list] || []).find(x => x.id === el.dataset.id);
+  if (!f || !confirm('Supprimer « ' + f.name + ' » de la liste ? (le journal est conservé)')) return;
+  db[c.list] = db[c.list].filter(x => x.id !== f.id); st.checked = st.checked.filter(i => i !== f.id); save(); prodBatchForm(k, st);
 }
 function scanLog(msg, warn) { scan.log.unshift({ msg, warn: !!warn }); scan.log = scan.log.slice(0, 25); paintScan(); toast(msg); }
 function parseCode(raw) {
@@ -456,7 +494,7 @@ function handleScan(raw, force) {
     if (m === 'loss') { const wi = h.status === 'hivernage'; h.status = 'morte'; h.flag = false; h.todo = ''; addLog(h.id, wi ? 'Morte en hivernage' : 'Perte', ''); scanLog(hn(h) + (wi ? ' morte en hivernage' : ' perdue') + tag); }
     if (m === 'queen') { const q = Q(scan.target), prev = h.queenId && h.queenId !== q.id ? Q(h.queenId) : null; h.queenId = q.id; addLog(h.id, prev ? 'Changement de reine' : 'Reine', prev ? qLabel(prev) + ' → ' + qLabel(q) : 'Reine ' + qLabel(q) + ' associée'); scanLog(hn(h) + ' ← reine ' + qLabel(q) + tag); }
     if (m === 'harvest') { scan.hive = h.id; let n = 0; scan.pending.forEach(sid => { const s = S(sid); if (s && linkSuper(s, h)) n++; }); scan.pending = []; scanLog(hn(h) + ' sélectionnée' + (n ? ' · ' + n + ' hausse(s) liée(s)' : '') + tag); }
-    if (m === 'move' || m === 'feed') { if (scan.batch.includes(h.id)) scanLog(hn(h) + ' déjà dans la liste', true); else { scan.batch.push(h.id); scanLog(hn(h) + ' ajoutée (' + scan.batch.length + ')' + tag); } }
+    if (m === 'move' || m === 'feed' || m === 'treat') { if (scan.batch.includes(h.id)) scanLog(hn(h) + ' déjà dans la liste', true); else { scan.batch.push(h.id); scanLog(hn(h) + ' ajoutée (' + scan.batch.length + ')' + tag); } }
     if (m === 'winter' && scan.wact === 'out') { const a = A(scan.target); if (a) h.apiaryId = a.id; h.status = 'active'; addLog(h.id, 'Sortie d’hivernage', a ? 'Sortie d’hivernage vers ' + a.name : 'Sortie d’hivernage'); scanLog(hn(h) + ' sortie d’hivernage' + (a ? ' → ' + a.name : '') + tag); }
     else if (m === 'winter') { const a = A(scan.target); h.apiaryId = a.id; h.status = 'hivernage'; addLog(h.id, 'Hivernage', 'Hivernage à ' + a.name); scanLog(hn(h) + ' hivernage à ' + a.name + tag); }
   } else if (p.t === 'S') {
@@ -560,7 +598,7 @@ function applyQueenChoice(h, el, v) {
   if (created) { q = { id: uid(), code, year: parseInt(el.qnew_year.value, 10) || '', lineage: el.qnew_lineage.value.trim(), motherId: el.qnew_mother.value, note: '' }; db.queens.push(q); }
   const prev = Q(h.queenId);
   h.queenId = q.id;
-  addLog(h.id, v.type, (prev ? qLabel(prev) + ' → ' : 'Reine ') + qLabel(q) + (created ? ' (nouvelle reine)' : '') + (v.note ? '\n' + v.note : ''));
+  addLog(h.id, v.type, (prev ? qLabel(prev) + ' → ' : 'Reine ') + qLabel(q) + (created ? ' (nouvelle reine)' : '') + (v.note ? '\n' + v.note : ''), null, fromLocalInput(v.when));
   h.flag = v.flag; save(); render(true); toast(created ? 'Reine créée et placée dans la ruche' : 'Reine placée dans la ruche');
   return true;
 }
@@ -578,11 +616,18 @@ function logForm(h) {
     '<label>Année de naissance</label><input name="qnew_year" inputmode="numeric" value="' + new Date().getFullYear() + '">' +
     '<label>Lignée / souche</label><input name="qnew_lineage" autocomplete="off">' +
     '<label>Mère</label><select name="qnew_mother">' + optsHtml(queenOptions('— Inconnue —')) + '</select></div></div>';
-  const html = qbox + '<div id="lg-visite" class="lgbox">' + tri('reine', 'Reine') + tri('pontes', 'Pontes') + '</div>' +
+  const prodList = k => { const c = PRODS[k]; db[c.list] = db[c.list] || []; return '<label>' + c.given + '</label><div class="feedlist">' + db[c.list].map(f => '<label class="chk"><input type="checkbox" name="' + c.pre + f.id + '"> ' + esc(f.name) + '</label>').join('') + '</div><label>Créer un nouveau ' + c.noun + ' (facultatif, ajouté à la liste)</label><input name="' + c.nw + '" placeholder="' + esc(c.ph) + '" autocomplete="off">'; };
+  const extra = '<div id="lg-feed" class="lgbox" hidden>' + prodList('feed') + '</div><div id="lg-treat" class="lgbox" hidden>' + prodList('treat') + '</div>' +
+    '<div id="lg-pqty" class="lgbox" hidden><label>Quantité (facultatif, ex. 2 L, 500 g)</label><input name="pqty" autocomplete="off"></div>' +
+    '<div id="lg-move" class="lgbox" hidden><label>Vers quel rucher ?</label><select name="mv_ap">' + optsHtml(apiaryOptions('— Choisir —')) + '</select></div>' +
+    '<div id="lg-winter" class="lgbox" hidden><label>Action</label><select name="wi_act"><option value="in">Hivernage</option><option value="out">Sortie d’hivernage</option></select><label>Rucher (obligatoire pour l’hivernage, facultatif pour la sortie)</label><select name="wi_ap">' + optsHtml(apiaryOptions('— Choisir —')) + '</select></div>' +
+    '<div id="lg-loss" class="lgbox hint" hidden>La ruche sera marquée morte (« morte en hivernage » si elle hivernait).</div>' +
+    '<div id="lg-super" class="lgbox" hidden><label>Numéros de hausses (facultatif, ex. 12, 13)</label><input name="sup_codes" autocomplete="off"></div>';
+  const html = qbox + extra + '<div id="lg-visite" class="lgbox">' + tri('reine', 'Reine') + tri('pontes', 'Pontes') + '</div>' +
     '<div id="lg-ajout" class="lgbox" hidden>' + AJOUTS.map(a => '<div class="step"><span>' + a[1] + '</span><button type="button" data-step="-1" data-for="' + a[0] + '">−</button><input name="aj_' + a[0] + '" type="number" min="0" max="99" value="0" inputmode="numeric"><button type="button" data-step="1" data-for="' + a[0] + '">+</button></div>').join('') + '</div>';
   form({
     title: 'Intervention · ruche ' + h.code,
-    fields: [{ name: 'type', type: 'hidden', value: 'Visite' }, { type: 'html', html: typeTiles }, { type: 'html', html }, { name: 'note', label: 'Notes (couvain, réserves, comportement…)', type: 'textarea' }, { name: 'flag', label: '⚑ Marquer à surveiller', type: 'checkbox', value: h.flag }],
+    fields: [{ name: 'type', type: 'hidden', value: 'Visite' }, { type: 'html', html: typeTiles }, { type: 'html', html }, whenField(), { name: 'note', label: 'Notes (couvain, réserves, comportement…)', type: 'textarea' }, { name: 'flag', label: '⚑ Marquer à surveiller', type: 'checkbox', value: h.flag }],
     onSubmit(v) {
       const el = $('#f').elements, data = {};
       if (v.type === 'Changement de reine' || v.type === 'Reine') return applyQueenChoice(h, el, v);
@@ -592,11 +637,35 @@ function logForm(h) {
         if (!Object.keys(aj).length && !v.note) { toast('Indiquez au moins un élément ajouté'); return false; }
         if (Object.keys(aj).length) data.ajout = aj;
       }
-      addLog(h.id, v.type, v.note, Object.keys(data).length ? data : null); h.flag = v.flag; save(); render(true); toast('Intervention enregistrée');
+      const ts = fromLocalInput(v.when); let type = v.type, note = v.note;
+      const nl = (txt) => txt + (v.note ? '\n' + v.note : '');
+      if (type === 'Nourrissement' || type === 'Traitement') {
+        const k = type === 'Traitement' ? 'treat' : 'feed', c = PRODS[k], names = prodNames(k, el, true);
+        if (!names.length) { toast('Choisissez ou créez un ' + c.noun); return false; }
+        data[c.key] = names; const q = el.pqty.value.trim(); if (q) data.qty = q;
+        note = nl(names.join(' + ') + (q ? ' — ' + q : ''));
+      }
+      if (type === 'Transhumance') {
+        const a = A(el.mv_ap.value); if (!a) { toast('Choisissez le rucher de destination'); return false; }
+        h.apiaryId = a.id; if (h.status === 'hivernage') h.status = 'active'; note = nl('Déplacée vers ' + a.name);
+      }
+      if (type === 'Hivernage') {
+        const out = el.wi_act.value === 'out', a = A(el.wi_ap.value);
+        if (!out && !a) { toast('Choisissez le rucher d’hivernage'); return false; }
+        if (a) h.apiaryId = a.id; h.status = out ? 'active' : 'hivernage'; type = out ? 'Sortie d’hivernage' : 'Hivernage';
+        note = nl(type + (a ? (out ? ' vers ' : ' à ') + a.name : ''));
+      }
+      if (type === 'Perte') { const wi = h.status === 'hivernage'; h.status = 'morte'; h.todo = ''; v.flag = false; if (wi) type = 'Morte en hivernage'; }
+      if (type === 'Pose de hausse' || type === 'Récolte') {
+        const codes = el.sup_codes.value.split(/[\s,;]+/).filter(Boolean);
+        if (codes.length) { codes.forEach(cd => { const sp = superByCode(cd) || newSuper(cd); sp.hiveId = h.id; sp.since = today(); }); data.supers = codes; note = nl('Hausse' + (codes.length > 1 ? 's' : '') + ' ' + codes.join(', ')); }
+      }
+      addLog(h.id, type, note, Object.keys(data).length ? data : null, ts); h.flag = v.flag; save(); render(true); toast('Intervention enregistrée');
     }
   });
   const f = $('#f');
-  const sync = () => { const t = f.elements.type.value; $('#lg-visite').hidden = t !== 'Visite'; $('#lg-ajout').hidden = t !== 'Ajout'; $('#lg-reine').hidden = !(t === 'Changement de reine' || t === 'Reine'); };
+  const PANELS = { 'Visite': ['lg-visite'], 'Ajout': ['lg-ajout'], 'Changement de reine': ['lg-reine'], 'Reine': ['lg-reine'], 'Nourrissement': ['lg-feed', 'lg-pqty'], 'Traitement': ['lg-treat', 'lg-pqty'], 'Transhumance': ['lg-move'], 'Hivernage': ['lg-winter'], 'Perte': ['lg-loss'], 'Pose de hausse': ['lg-super'], 'Récolte': ['lg-super'] };
+  const sync = () => { const t = f.elements.type.value, on = PANELS[t] || []; ['lg-visite', 'lg-ajout', 'lg-reine', 'lg-feed', 'lg-treat', 'lg-pqty', 'lg-move', 'lg-winter', 'lg-loss', 'lg-super'].forEach(id => { $('#' + id).hidden = !on.includes(id); }); };
   sync();
   f.addEventListener('click', e => {
     const tt = e.target.closest('[data-type]');
@@ -614,11 +683,20 @@ function logForm(h) {
     if (sb) { const i = f.elements['aj_' + sb.dataset.for]; i.value = Math.max(0, Math.min(99, (parseInt(i.value, 10) || 0) + parseInt(sb.dataset.step, 10))); }
   });
 }
+function editLogForm(id) {
+  const l = db.logs.find(x => x.id === id); if (!l) return; const h = H(l.hiveId);
+  form({
+    title: l.type + (h ? ' · ' + hn(h) : ''),
+    fields: [whenField(l.ts), { name: 'note', label: 'Note', type: 'textarea', value: l.note }],
+    extra: '<div class="actions"><button type="button" class="small danger" data-act="delLog" data-id="' + l.id + '">Supprimer cette entrée</button></div>',
+    onSubmit(v) { l.ts = fromLocalInput(v.when); l.note = v.note; save(); render(true); toast('Journal mis à jour'); }
+  });
+}
 function logTodo(h) {
   form({
     title: 'Opération à faire · ruche ' + h.code,
-    fields: [{ name: 'todo', label: 'Quoi faire ? (ex. à traiter, trop de varroas)', type: 'textarea', value: h.todo || '' }],
-    onSubmit(v) { if (!v.todo) { toast('Décrivez l’opération'); return false; } h.todo = v.todo; h.flag = true; addLog(h.id, 'Opération à faire', v.todo); save(); render(true); toast('Opération notée'); }
+    fields: [{ name: 'todo', label: 'Quoi faire ? (ex. à traiter, trop de varroas)', type: 'textarea', value: h.todo || '' }, whenField()],
+    onSubmit(v) { if (!v.todo) { toast('Décrivez l’opération'); return false; } h.todo = v.todo; h.flag = true; addLog(h.id, 'Opération à faire', v.todo, null, fromLocalInput(v.when)); save(); render(true); toast('Opération notée'); }
   });
 }
 function queenForm(q) {
@@ -828,15 +906,13 @@ const ACT = {
   goScan(el) { scan.mode = el.dataset.m; scan.target = ''; scan.pending = []; scan.batch = []; scan.hive = ''; if (location.hash === '#/scan') render(false); else location.hash = '#/scan'; },
   batchDel(el) { scan.batch = scan.batch.filter(id => id !== el.dataset.id); paintScan(); },
   batchClear() { scan.batch = []; paintScan(); },
-  batchOk() { if (scan.mode === 'move') moveBatchForm(); else feedBatchForm(); },
-  feedNew() {
-    const st = feedState(), name = $('#f').elements.newfeed.value.trim();
-    if (!name) { toast('Écrivez le nom du nourrissement'); return; }
-    db.feeds = db.feeds || [];
-    if (db.feeds.some(f => f.name.toLowerCase() === name.toLowerCase())) { toast('Ce nourrissement existe déjà'); return; }
-    const f = { id: uid(), name }; db.feeds.push(f); st.checked.push(f.id); save(); feedBatchForm(st);
-  },
-  feedDel(el) { const st = feedState(), f = (db.feeds || []).find(x => x.id === el.dataset.id); if (!f || !confirm('Supprimer « ' + f.name + ' » de la liste ? (le journal est conservé)')) return; db.feeds = db.feeds.filter(x => x.id !== f.id); st.checked = st.checked.filter(i => i !== f.id); save(); feedBatchForm(st); },
+  batchOk() { if (scan.mode === 'move') moveBatchForm(); else if (scan.mode === 'treat') prodBatchForm('treat'); else prodBatchForm('feed'); },
+  feedNew() { prodNew('feed'); },
+  trtNew() { prodNew('treat'); },
+  feedDel(el) { prodDel('feed', el); },
+  trtDel(el) { prodDel('treat', el); },
+  editLog(el) { editLogForm(el.dataset.id); },
+  delLog(el) { const l = db.logs.find(x => x.id === el.dataset.id); if (!l || !confirm('Supprimer cette entrée du journal ?')) return; db.logs = db.logs.filter(x => x.id !== l.id); save(); closeSheet(); render(true); },
   scanReset() { scan.hive = ''; scan.pending = []; paintScan(); },
   camToggle() { if (scan.stream) { scan.manualOff = true; stopCam(); } else { scan.manualOff = false; startCam(); } },
   manualGo() { const i = $('#manual'); if (!i || !i.value.trim()) return; handleScan(i.value, true); i.value = ''; }

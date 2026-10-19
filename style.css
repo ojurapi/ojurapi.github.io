@@ -195,3 +195,7 @@ svg.map{width:100%;height:auto;background:var(--card);border:1px solid var(--lin
 .label .qrw{display:flex;align-items:center;justify-content:center}
 .label .qrw svg{margin:0 auto}
 .label .lt{text-align:center;font-weight:700;font-size:14px}
+
+.edl{cursor:pointer}
+.typegrid .ico svg{width:32px;height:32px;margin:-4px 0;stroke:#b7791f;fill:#fbe7b0;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+input[type=datetime-local]{width:100%;font:inherit}
