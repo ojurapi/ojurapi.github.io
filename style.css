@@ -201,3 +201,8 @@ svg.map{width:100%;height:auto;background:var(--card);border:1px solid var(--lin
 input[type=datetime-local]{width:100%;font:inherit}
 
 .modebar{font-size:20px;margin:2px 0 0;color:var(--ink)}
+
+.typegrid .ico{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;position:relative;color:var(--c);font-size:0}
+.typegrid .ico::before{content:'';position:absolute;inset:0;border-radius:50%;background:var(--c);opacity:.16}
+.typegrid .ico svg{position:relative;width:28px;height:28px;margin:0;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.typegrid button{min-height:80px}

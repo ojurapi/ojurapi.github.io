@@ -174,7 +174,11 @@ const ICONS = {
   labels: '<rect x="7" y="7" width="13" height="13" rx="2"/><rect x="28" y="7" width="13" height="13" rx="2"/><rect x="7" y="28" width="13" height="13" rx="2"/><path d="M28 28H33V33H28ZM36 36H41V41H36ZM36 28H41M28 36V41"/>'
 };
 ICONS.treat = '<path d="M32 6L42 16M37 11L20 28V34H26L43 17"/><path d="M20 34L12 42"/><path d="M10 18C10 18 5.5 23.5 5.5 27a4.5 4.5 0 0 0 9 0C14.5 23.5 10 18 10 18Z"/>';
-LOGICONS['Pose de hausse'] = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 18H41V37a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3Z"/><path d="M7 18L10.5 9H37.5L41 18"/><path d="M16 24V34M24 24V34M32 24V34"/></svg>';
+ICONS.plus = '<circle cx="24" cy="24" r="17"/><path d="M24 15V33M15 24H33"/>';
+ICONS.split = '<path d="M24 42V26M24 26L12 14M24 26L36 14"/><circle cx="12" cy="10" r="4"/><circle cx="36" cy="10" r="4"/>';
+ICONS.other = '<circle cx="11" cy="24" r="2.5"/><circle cx="24" cy="24" r="2.5"/><circle cx="37" cy="24" r="2.5"/>';
+const LOGICON = { 'Visite': ['visit', '#2f7d4f'], 'Ajout': ['plus', '#a86f00'], 'Changement de reine': ['queen', '#8e44ad'], 'Reine': ['queen', '#8e44ad'], 'Perte': ['loss', '#b42318'], 'Nourrissement': ['feed', '#0e9f6e'], 'Traitement': ['treat', '#be185d'], 'Pose de hausse': ['supers', '#0f766e'], 'Division / essaim': ['split', '#2f5bea'], 'Récolte': ['harvest', '#d99a1c'], 'Transhumance': ['move', '#2f5bea'], 'Hivernage': ['winter', '#1b8fb3'], 'Autre': ['other', '#57534e'] };
+const logIcon = t => { const d = LOGICON[t] || LOGICON.Autre; return '<span class="ico" style="--c:' + d[1] + '"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[d[0]] + '</svg></span>'; };
 const TILE_DEFS = [
   { k: 'open', kind: 'scan', icon: 'scan', label: 'Scanner', color: '#a86f00', target: 'open' },
   { k: 'visit', kind: 'scan', icon: 'visit', label: 'Visite', color: '#2f7d4f', target: 'visit' },
@@ -606,7 +610,7 @@ function applyQueenChoice(h, el, v) {
 }
 function logForm(h) {
   const tri = (name, label) => '<div class="trirow"><span>' + label + '</span><div class="tri" data-tri="' + name + '"><button type="button" data-v="ok">✓ OK</button><button type="button" data-v="ko">✕ KO</button></div><input type="hidden" name="' + name + '" value=""></div>';
-  const typeTiles = '<label>Type d’intervention</label><div class="typegrid">' + LOGTYPES.map((t, i) => '<button type="button" class="' + (i === 0 ? 'on' : '') + '" data-type="' + t + '"><span class="ico">' + LOGICONS[t] + '</span>' + t + '</button>').join('') + '</div>';
+  const typeTiles = '<label>Type d’intervention</label><div class="typegrid">' + LOGTYPES.map((t, i) => '<button type="button" class="' + (i === 0 ? 'on' : '') + '" data-type="' + t + '">' + logIcon(t) + '' + t + '</button>').join('') + '</div>';
   const optsHtml = arr => arr.map(o => '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>').join('');
   const curQ = Q(h.queenId);
   const qbox = '<div id="lg-reine" class="lgbox" hidden>' +
