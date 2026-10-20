@@ -608,6 +608,7 @@ function applyQueenChoice(h, el, v) {
   h.flag = v.flag; save(); render(true); toast(created ? 'Reine créée et placée dans la ruche' : 'Reine placée dans la ruche');
   return true;
 }
+const nl2 = (a, b) => (a ? a + '\n' : '') + b;
 function logForm(h) {
   const tri = (name, label) => '<div class="trirow"><span>' + label + '</span><div class="tri" data-tri="' + name + '"><button type="button" data-v="ok">✓ OK</button><button type="button" data-v="ko">✕ KO</button></div><input type="hidden" name="' + name + '" value=""></div>';
   const typeTiles = '<label>Type d’intervention</label><div class="typegrid">' + LOGTYPES.map((t, i) => '<button type="button" class="' + (i === 0 ? 'on' : '') + '" data-type="' + t + '">' + logIcon(t) + '' + t + '</button>').join('') + '</div>';
@@ -629,7 +630,7 @@ function logForm(h) {
     '<div id="lg-winter" class="lgbox" hidden><label>Action</label><select name="wi_act"><option value="in">Hivernage</option><option value="out">Sortie d’hivernage</option></select><label>Rucher (obligatoire pour l’hivernage, facultatif pour la sortie)</label><select name="wi_ap">' + optsHtml(apiaryOptions('— Choisir —')) + '</select></div>' +
     '<div id="lg-loss" class="lgbox hint" hidden>La ruche sera marquée morte (« morte en hivernage » si elle hivernait).</div>' +
     '<div id="lg-super" class="lgbox" hidden><label>Numéros de hausses (facultatif, ex. 12, 13)</label><input name="sup_codes" autocomplete="off"></div>';
-  const html = qbox + extra + '<div id="lg-visite" class="lgbox">' + tri('reine', 'Reine') + tri('pontes', 'Pontes') + '</div>' +
+  const html = qbox + extra + '<div id="lg-visite" class="lgbox">' + (h.status === 'morte' ? '<div class="hint" style="margin:6px 0">Cette ruche est marquée morte : enregistrer une visite la réactivera.</div>' : '') + tri('reine', 'Reine') + tri('pontes', 'Pontes') + '</div>' +
     '<div id="lg-ajout" class="lgbox" hidden>' + AJOUTS.map(a => '<div class="step"><span>' + a[1] + '</span><button type="button" data-step="-1" data-for="' + a[0] + '">−</button><input name="aj_' + a[0] + '" type="number" min="0" max="99" value="0" inputmode="numeric"><button type="button" data-step="1" data-for="' + a[0] + '">+</button></div>').join('') + '</div>';
   form({
     title: 'Intervention · ruche ' + h.code,
@@ -666,7 +667,9 @@ function logForm(h) {
         const codes = el.sup_codes.value.split(/[\s,;]+/).filter(Boolean);
         if (codes.length) { codes.forEach(cd => { const sp = superByCode(cd) || newSuper(cd); sp.hiveId = h.id; sp.since = today(); }); data.supers = codes; note = nl('Hausse' + (codes.length > 1 ? 's' : '') + ' ' + codes.join(', ')); }
       }
-      addLog(h.id, type, note, Object.keys(data).length ? data : null, ts); h.flag = v.flag; save(); render(true); toast('Intervention enregistrée');
+      let react = false;
+      if (type === 'Visite' && h.status === 'morte') { h.status = 'active'; react = true; note = nl2(note, 'Ruche réactivée (était morte)'); }
+      addLog(h.id, type, note, Object.keys(data).length ? data : null, ts); h.flag = v.flag; save(); render(true); toast(react ? 'Intervention enregistrée · ruche réactivée' : 'Intervention enregistrée');
     }
   });
   const f = $('#f');
