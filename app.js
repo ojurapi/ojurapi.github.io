@@ -13,7 +13,7 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = fal
 
 /* ================= données ================= */
 const KEY = 'ruchier.v1';
-const EMPTY = () => ({ apiaries: [], hives: [], supers: [], queens: [], logs: [], tasks: [], feeds: [{ id: 'f1', name: 'Sirop 50/50' }, { id: 'f2', name: 'Sirop 70/30' }, { id: 'f3', name: 'Candi' }, { id: 'f4', name: 'Pâte protéinée' }], treatments: [{ id: 't1', name: 'Dégouttement' }, { id: 't2', name: 'Lange A/O' }, { id: 't3', name: 'Sublimation' }], seq: 1, lastBackup: 0, homeOrder: null, homeHidden: null });
+const EMPTY = () => ({ apiaries: [], hives: [], supers: [], queens: [], logs: [], tasks: [], feeds: [{ id: 'f1', name: 'Sirop 50/50' }, { id: 'f2', name: 'Sirop 70/30' }, { id: 'f3', name: 'Candi' }, { id: 'f4', name: 'Pâte protéinée' }], treatments: [{ id: 't1', name: 'Dégouttement' }, { id: 't2', name: 'Lange A/O' }, { id: 't3', name: 'Sublimation' }], harvests: [], varroa: [], honeys: [{ id: 'm1', name: 'Acacia' }, { id: 'm2', name: 'Toutes fleurs' }, { id: 'm3', name: 'Tilleul' }, { id: 'm4', name: 'Châtaignier' }, { id: 'm5', name: 'Sapin' }, { id: 'm6', name: 'Forêt' }], varroaThr: { langes: [1, 5], co2: [2, 3] }, seq: 1, lastBackup: 0, homeOrder: null, homeHidden: null });
 let db = load();
 function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY) || 'null'); if (d && Array.isArray(d.hives)) { const r = Object.assign(EMPTY(), d); (r.feeds || []).forEach(f => { if (f.name === 'Sirop 3:2') f.name = 'Sirop 70/30'; }); return r; } } catch (e) { /* ignore */ }
@@ -35,7 +35,7 @@ const KINDS = [['ruche', 'Ruche'], ['ruchette', 'Ruchette'], ['nuc', 'Nuc']];
 const kindLabel = h => (KINDS.find(k => k[0] === h.kind) || KINDS[0])[1];
 const hn = h => kindLabel(h) + ' ' + h.code;
 const STATUS = [['active', 'Active'], ['hivernage', 'Hivernage'], ['morte', 'Morte'], ['vendue', 'Vendue']];
-const LOGTYPES = ['Visite', 'Ajout', 'Changement de reine', 'Perte', 'Nourrissement', 'Traitement', 'Pose de hausse', 'Division / essaim', 'Reine', 'Récolte', 'Transhumance', 'Hivernage', 'Autre'];
+const LOGTYPES = ['Visite', 'Ajout', 'Changement de reine', 'Perte', 'Nourrissement', 'Traitement', 'Varroa', 'Pose de hausse', 'Division / essaim', 'Reine', 'Récolte', 'Transhumance', 'Hivernage', 'Autre'];
 
 const LOGICONS = { 'Sortie d’hivernage': '🌤️', 'Visite': '👀', 'Ajout': '➕', 'Changement de reine': '👑', 'Perte': '✖️', 'Nourrissement': '🥣', 'Traitement': '💊', 'Pose de hausse': '📦', 'Division / essaim': '🔀', 'Reine': '👑', 'Récolte': '🍯', 'Transhumance': '🚚', 'Hivernage': '❄️', 'Autre': '⋯' };
 const AJOUTS = [['gaufre', 'Cadre gaufré', 'Cadres gaufrés'], ['construit', 'Cadre construit', 'Cadres construits'], ['males', 'Cadre à mâles', 'Cadres à mâles'], ['partition', 'Partition', 'Partitions']];
@@ -46,7 +46,7 @@ const whenField = ts => ({ name: 'when', label: 'Date et heure', type: 'datetime
 function addLog(hiveId, type, note, data, ts) {
   const l = { id: uid(), ts: ts || Date.now(), hiveId, type, note: note || '' };
   if (data) l.data = data;
-  db.logs.push(l);
+  db.logs.push(l); return l;
 }
 const isTodo = l => l.type === 'Opération à faire';
 function logDetail(l) {
@@ -54,6 +54,8 @@ function logDetail(l) {
   let s = '';
   if (d.reine) s += '<span class="badge ' + (d.reine === 'ok' ? 'ok' : 'warn') + '">Reine ' + (d.reine === 'ok' ? 'OK' : 'KO') + '</span>';
   if (d.pontes) s += '<span class="badge ' + (d.pontes === 'ok' ? 'ok' : 'warn') + '">Pontes ' + (d.pontes === 'ok' ? 'OK' : 'KO') + '</span>';
+  if (d.varroa) s += '<span class="badge ' + ['ok', 'warn', 'bad'][d.varroa.level || 0] + '">Varroa ' + vFmt(d.varroa) + '</span>';
+  if (d.weight) s += '<span class="badge">' + KG(d.weight) + (d.honey ? ' · ' + esc(d.honey) : '') + '</span>';
   if (d.ajout) s += AJOUTS.filter(a => d.ajout[a[0]]).map(a => '+' + d.ajout[a[0]] + ' ' + (d.ajout[a[0]] > 1 ? a[2] : a[1]).toLowerCase()).join(' · ');
   return s ? '<div>' + s + '</div>' : '';
 }
@@ -66,6 +68,7 @@ function nextCode(list) { const n = list.map(x => parseInt(x.code, 10)).filter(N
 function removeHive(h) {
   db.hives = db.hives.filter(x => x.id !== h.id);
   db.logs = db.logs.filter(l => l.hiveId !== h.id);
+  db.varroa = (db.varroa || []).filter(r => r.hiveId !== h.id);
   db.supers.forEach(s => { if (s.hiveId === h.id) s.hiveId = ''; });
 }
 
@@ -149,7 +152,7 @@ function mapSvg(list) {
 /* ================= vues ================= */
 const ui = { q: '', ap: '', st: '', homeEdit: false };
 const VIEWS = {};
-const MODE_ICONS = { open: ['scan', '#a86f00'], visit: ['visit', '#2f7d4f'], queen: ['queen', '#8e44ad'], harvest: ['harvest', '#d99a1c'], move: ['move', '#2f5bea'], winter: ['winter', '#1b8fb3'], feed: ['feed', '#0e9f6e'], treat: ['treat', '#be185d'], loss: ['loss', '#b42318'], todo: ['todo', '#e5702a'] };
+const MODE_ICONS = { open: ['scan', '#a86f00'], visit: ['visit', '#2f7d4f'], queen: ['queen', '#8e44ad'], harvest: ['harvest', '#d99a1c'], move: ['move', '#2f5bea'], winter: ['winter', '#1b8fb3'], feed: ['feed', '#0e9f6e'], treat: ['treat', '#be185d'], varroa: ['varroa', '#7c2d12'], loss: ['loss', '#b42318'], todo: ['todo', '#e5702a'] };
 
 /* ================= couleurs de ruchers, icônes et tuiles ================= */
 const ACOLORS = [['', 'Aucune'], ['red', 'Rouge'], ['green', 'Vert'], ['yellow', 'Jaune'], ['blue', 'Bleu']];
@@ -177,7 +180,9 @@ ICONS.treat = '<path d="M32 6L42 16M37 11L20 28V34H26L43 17"/><path d="M20 34L12
 ICONS.plus = '<circle cx="24" cy="24" r="17"/><path d="M24 15V33M15 24H33"/>';
 ICONS.split = '<path d="M24 42V26M24 26L12 14M24 26L36 14"/><circle cx="12" cy="10" r="4"/><circle cx="36" cy="10" r="4"/>';
 ICONS.other = '<circle cx="11" cy="24" r="2.5"/><circle cx="24" cy="24" r="2.5"/><circle cx="37" cy="24" r="2.5"/>';
-const LOGICON = { 'Visite': ['visit', '#2f7d4f'], 'Ajout': ['plus', '#a86f00'], 'Changement de reine': ['queen', '#8e44ad'], 'Reine': ['queen', '#8e44ad'], 'Perte': ['loss', '#b42318'], 'Nourrissement': ['feed', '#0e9f6e'], 'Traitement': ['treat', '#be185d'], 'Pose de hausse': ['supers', '#0f766e'], 'Division / essaim': ['split', '#2f5bea'], 'Récolte': ['harvest', '#d99a1c'], 'Transhumance': ['move', '#2f5bea'], 'Hivernage': ['winter', '#1b8fb3'], 'Autre': ['other', '#57534e'] };
+ICONS.varroa = '<ellipse cx="24" cy="26" rx="11" ry="8"/><path d="M13 21L6 16M13 26H5M13 31L6 36M35 21L42 16M35 26H43M35 31L42 36M19 18L17 11M29 18L31 11"/>';
+ICONS.chart = '<path d="M9 41V7M9 41H42"/><path d="M17 41V28M26 41V16M35 41V22"/>';
+const LOGICON = { 'Varroa': ['varroa', '#7c2d12'], 'Visite': ['visit', '#2f7d4f'], 'Ajout': ['plus', '#a86f00'], 'Changement de reine': ['queen', '#8e44ad'], 'Reine': ['queen', '#8e44ad'], 'Perte': ['loss', '#b42318'], 'Nourrissement': ['feed', '#0e9f6e'], 'Traitement': ['treat', '#be185d'], 'Pose de hausse': ['supers', '#0f766e'], 'Division / essaim': ['split', '#2f5bea'], 'Récolte': ['harvest', '#d99a1c'], 'Transhumance': ['move', '#2f5bea'], 'Hivernage': ['winter', '#1b8fb3'], 'Autre': ['other', '#57534e'] };
 const logIcon = t => { const d = LOGICON[t] || LOGICON.Autre; return '<span class="ico" style="--c:' + d[1] + '"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[d[0]] + '</svg></span>'; };
 const TILE_DEFS = [
   { k: 'open', kind: 'scan', icon: 'scan', label: 'Scanner', color: '#a86f00', target: 'open' },
@@ -188,6 +193,7 @@ const TILE_DEFS = [
   { k: 'winter', kind: 'scan', icon: 'winter', label: 'Hivernage', color: '#1b8fb3', target: 'winter' },
   { k: 'feed', kind: 'scan', icon: 'feed', label: 'Nourrissement', color: '#0e9f6e', target: 'feed' },
   { k: 'treat', kind: 'scan', icon: 'treat', label: 'Traitement', color: '#be185d', target: 'treat' },
+  { k: 'varroa', kind: 'scan', icon: 'varroa', label: 'Varroa', color: '#7c2d12', target: 'varroa' },
   { k: 'loss', kind: 'scan', icon: 'loss', label: 'Perte', color: '#b42318', target: 'loss' },
   { k: 'todo', kind: 'scan', icon: 'todo', label: 'À faire', color: '#e5702a', target: 'todo' },
   { k: 'hives', kind: 'nav', icon: 'hives', label: 'Ruches', color: '#a86f00', target: '#/ruches', badge: 'flag' },
@@ -195,6 +201,7 @@ const TILE_DEFS = [
   { k: 'tasks', kind: 'nav', icon: 'tasks', label: 'Tâches', color: '#5b6b7a', target: '#/taches', badge: 'tasks' },
   { k: 'labels', kind: 'nav', icon: 'labels', label: 'Étiquettes', color: '#c2410c', target: '#/etiquettes' },
   { k: 'supers', kind: 'nav', icon: 'supers', label: 'Hausses', color: '#0f766e', target: '#/hausses' },
+  { k: 'recoltes', kind: 'nav', icon: 'chart', label: 'Récoltes', color: '#b7791f', target: '#/recoltes' },
   { k: 'settings', kind: 'nav', icon: 'settings', label: 'Réglages', color: '#57534e', target: '#/plus' },
   { k: 'queens', kind: 'nav', icon: 'queen', label: 'Reines & lignées', color: '#7c3aed', target: '#/reines' }
 ];
@@ -301,6 +308,7 @@ VIEWS.ruche = id => {
   html += '</div><div class="actions"><button class="primary small" data-act="addLog" data-id="' + h.id + '">+ Intervention</button><button class="small" data-act="toggleFlag" data-id="' + h.id + '">' + (h.flag ? '⚐ Retirer le signal' : '⚑ À surveiller') + '</button><button class="small" data-act="moveHive" data-id="' + h.id + '">Déplacer</button><button class="small" data-act="hiveQr" data-id="' + h.id + '">QR</button><button class="small" data-act="editHive" data-id="' + h.id + '">Modifier</button><button class="small danger" data-act="delHive" data-id="' + h.id + '">Supprimer</button></div>';
   html += '<h2>Hausses (' + supers.length + ')</h2>' + (supers.length ? supers.map(s => '<div class="item"><div class="grow"><div class="t">Hausse ' + esc(s.code) + '</div><div class="s">' + (s.since ? 'depuis le ' + fmtDate(s.since) : '') + '</div></div><button class="small" data-act="unlinkSuper" data-id="' + s.id + '">Retirer</button></div>').join('') : '<div class="hint">Aucune hausse.</div>');
   html += '<div class="actions"><button class="small" data-act="addSuperTo" data-id="' + h.id + '">+ Ajouter une hausse</button></div>';
+  html += hiveHarvestHtml(h) + hiveVarroaHtml(h);
   html += '<h2>Journal</h2>' + (logs.length ? '<div class="tl">' + logs.map(l => '<div class="e edl' + (isTodo(l) ? ' todo' : '') + '" data-act="editLog" data-id="' + l.id + '"><b>' + esc(l.type) + '</b> <small>' + fmtTime(l.ts) + '</small>' + logDetail(l) + (l.note ? '<div>' + esc(l.note).replace(/\n/g, '<br>') + '</div>' : '') + '</div>').join('') + '</div>' : '<div class="hint">Aucune intervention enregistrée.</div>');
   if (logs.length) html += '<p class="hint">Touchez une ligne pour modifier sa date, son heure ou sa note.</p>';
   return { title: hn(h), back: '#/ruches', html };
@@ -342,8 +350,8 @@ VIEWS.plus = () => {
   const days = db.lastBackup ? Math.floor((Date.now() - db.lastBackup) / 86400000) : null;
   let html = '';
   if (db.hives.length && (days === null || days > 30)) html += '<div class="card"><b>💾 Pensez à sauvegarder</b><div class="hint">' + (days === null ? 'Aucune sauvegarde faite.' : 'Dernière sauvegarde il y a ' + days + ' jours.') + ' Les données ne sont que sur ce téléphone.</div><div class="actions"><button class="primary small" data-act="backup">Sauvegarder maintenant</button></div></div>';
-  html += '<h2>Gestion</h2><a class="item" href="#/taches"><div class="grow t">Tâches</div><span class="chev">›</span></a><a class="item" href="#/reines"><div class="grow t">Reines & lignées</div><span class="chev">›</span></a><a class="item" href="#/hausses"><div class="grow t">Hausses</div><span class="chev">›</span></a><a class="item" href="#/etiquettes"><div class="grow t">Étiquettes QR à imprimer</div><span class="chev">›</span></a>';
-  html += '<h2>Exporter pour Excel (CSV)</h2><div class="actions">' + ['ruches', 'ruchers', 'hausses', 'reines', 'journal', 'taches'].map(k => '<button class="small" data-act="exportCsv" data-k="' + k + '">' + k + '</button>').join('') + '</div><p class="hint">Fichiers CSV (séparateur « ; », accents conservés) : s’ouvrent directement dans Excel ou LibreOffice. Sur téléphone, le menu de partage permet de les envoyer par e-mail.</p>';
+  html += '<h2>Gestion</h2><a class="item" href="#/recoltes"><div class="grow t">Récoltes & statistiques</div><span class="chev">›</span></a><a class="item" href="#/varroa"><div class="grow t">Suivi Varroa</div><span class="chev">›</span></a><a class="item" href="#/taches"><div class="grow t">Tâches</div><span class="chev">›</span></a><a class="item" href="#/reines"><div class="grow t">Reines & lignées</div><span class="chev">›</span></a><a class="item" href="#/hausses"><div class="grow t">Hausses</div><span class="chev">›</span></a><a class="item" href="#/etiquettes"><div class="grow t">Étiquettes QR à imprimer</div><span class="chev">›</span></a>';
+  html += '<h2>Exporter pour Excel (CSV)</h2><div class="actions">' + ['ruches', 'ruchers', 'hausses', 'reines', 'journal', 'taches', 'recoltes', 'varroa'].map(k => '<button class="small" data-act="exportCsv" data-k="' + k + '">' + k + '</button>').join('') + '</div><p class="hint">Fichiers CSV (séparateur « ; », accents conservés) : s’ouvrent directement dans Excel ou LibreOffice. Sur téléphone, le menu de partage permet de les envoyer par e-mail.</p>';
   html += '<h2>Sauvegarde complète</h2><div class="actions"><button data-act="backup">Exporter (.json)</button><button data-act="importPick">Restaurer…</button></div><input type="file" id="imp" accept=".json,application/json" hidden>';
   html += '<h2>Application</h2><div class="actions" id="inst"></div><p class="hint" id="instHint">Sur iPhone : Safari → Partager → « Sur l’écran d’accueil ». Sur Android : menu ⋮ → « Installer l’application ».</p>';
   html += '<h2>Zone dangereuse</h2><div class="actions"><button class="danger small" data-act="wipe">Effacer toutes les données</button></div>';
@@ -357,14 +365,15 @@ VIEWS.plus = () => {
 };
 
 /* ---- scan ---- */
-const scan = { wact: 'in', manualOff: false, mode: 'open', target: '', hive: '', pending: [], batch: [], last: '', lastT: 0, log: [], stream: null, timer: null, canvas: null };
-const MODES = [['open', 'Fiche'], ['visit', 'Visite'], ['queen', 'Reine'], ['harvest', 'Récolte'], ['move', 'Transhumance'], ['winter', 'Hivernage'], ['feed', 'Nourrir'], ['treat', 'Traitement'], ['loss', 'Perte'], ['todo', 'À faire']];
+const scan = { weigh: true, wact: 'in', manualOff: false, mode: 'open', target: '', hive: '', pending: [], batch: [], last: '', lastT: 0, log: [], stream: null, timer: null, canvas: null };
+const MODES = [['open', 'Fiche'], ['visit', 'Visite'], ['queen', 'Reine'], ['harvest', 'Récolte'], ['move', 'Transhumance'], ['winter', 'Hivernage'], ['feed', 'Nourrir'], ['treat', 'Traitement'], ['varroa', 'Varroa'], ['loss', 'Perte'], ['todo', 'À faire']];
 const MODE_HELP = {
   open: 'Scannez le QR d’une ruche pour ouvrir sa fiche.',
   queen: 'Choisissez (ou scannez) une reine, puis scannez les ruches qui la contiennent.',
-  harvest: 'Scannez la ruche, puis chaque hausse récoltée : elles sont reliées à cette ruche.',
+  harvest: 'Scannez la ruche, puis chaque hausse récoltée : elles sont reliées à cette ruche, puis le poids et le type de miel sont demandés.',
   move: 'Scannez toutes les ruches à déplacer, appuyez sur « Valider », puis choisissez le rucher de destination.',
   feed: 'Scannez toutes les ruches nourries, appuyez sur « Valider », puis choisissez le(s) nourrissement(s).',
+  varroa: 'Scannez une ruche : le formulaire de comptage Varroa s’ouvre (langes ou CO₂). Le suivi est dans Plus → Varroa.',
   treat: 'Scannez toutes les ruches traitées, appuyez sur « Valider », puis choisissez le(s) traitement(s) (ou créez-en un).',
   winter: 'Choisissez « Hivernage » (avec le rucher d’hivernage) ou « Sortie d’hivernage » (rucher d’arrivée facultatif), puis scannez chaque ruche.',
   visit: 'Scannez une ruche : le formulaire d’intervention s’ouvre (reine OK/KO, pontes OK/KO, ajouts de cadres).',
@@ -374,6 +383,8 @@ const MODE_HELP = {
 VIEWS.scan = () => {
   let ctx = '';
   if (scan.mode === 'queen') ctx = '<label>Reine</label><select id="scanTarget">' + queenOptions('— Choisir —').map(o => '<option value="' + esc(o[0]) + '"' + (scan.target === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
+  if (scan.mode === 'harvest') ctx = '<label class="chk"><input type="checkbox" id="scanWeigh"' + (scan.weigh ? ' checked' : '') + '> Demander le poids et le type de miel</label>';
+  if (scan.mode === 'varroa') ctx = '<div class="actions"><a class="button small" href="#/varroa">Voir le suivi Varroa</a></div>';
   if (scan.mode === 'winter') ctx = '<label>Action</label><select id="scanAct"><option value="in"' + (scan.wact === 'in' ? ' selected' : '') + '>Hivernage</option><option value="out"' + (scan.wact === 'out' ? ' selected' : '') + '>Sortie d’hivernage</option></select><label>' + (scan.wact === 'out' ? 'Rucher d’arrivée (facultatif)' : 'Rucher d’hivernage') + '</label><select id="scanTarget">' + apiaryOptions(scan.wact === 'out' ? '— Inchangé —' : '— Choisir —').map(o => '<option value="' + esc(o[0]) + '"' + (scan.target === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
   const modeName = (MODES.find(m => m[0] === scan.mode) || ['', ''])[1];
   const tilesH = '<h2>Choisir l’action</h2><div class="tiles tiles3">' + MODES.map(m => '<button class="tile ' + (scan.mode === m[0] ? 'on' : '') + '" data-act="scanMode" data-m="' + m[0] + '" style="--c:' + MODE_ICONS[m[0]][1] + '"><span class="ti"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[MODE_ICONS[m[0]][0]] + '</svg></span>' + m[1] + '</button>').join('') + '</div>';
@@ -384,6 +395,7 @@ VIEWS.scan = () => {
     title: 'Scanner', html,
     after() {
       const t = $('#scanTarget'); if (t) t.onchange = e => { scan.target = e.target.value; };
+      const sw = $('#scanWeigh'); if (sw) sw.onchange = e => { scan.weigh = e.target.checked; };
       const wa = $('#scanAct'); if (wa) wa.onchange = e => { scan.wact = e.target.value; scan.target = ''; render(true); };
       if (!scan.manualOff) setTimeout(() => { if (!scan.stream && (location.hash || '').startsWith('#/scan')) startCam(); }, 150);
       $('#manual').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); ACT.manualGo(); } };
@@ -477,7 +489,7 @@ function parseCode(raw) {
 }
 function linkSuper(s, h) {
   if (s.hiveId === h.id) return false;
-  s.hiveId = h.id; s.since = today(); addLog(h.id, 'Récolte', 'Hausse ' + s.code + ' récoltée'); return true;
+  s.hiveId = h.id; s.since = today(); return addLog(h.id, 'Récolte', 'Hausse ' + s.code + ' récoltée');
 }
 function handleScan(raw, force) {
   const p = parseCode(raw);
@@ -497,9 +509,10 @@ function handleScan(raw, force) {
     if (m === 'open') { save(); location.hash = '#/ruche/' + h.id; if (created) toast(hn(h) + ' créée'); return; }
     if (m === 'visit') { save(); location.hash = '#/ruche/' + h.id; setTimeout(() => logForm(h), 80); return; }
     if (m === 'todo') { save(); logTodo(h); return; }
+    if (m === 'varroa') { save(); varroaForm({ hive: h }); return; }
     if (m === 'loss') { const wi = h.status === 'hivernage'; h.status = 'morte'; h.flag = false; h.todo = ''; addLog(h.id, wi ? 'Morte en hivernage' : 'Perte', ''); scanLog(hn(h) + (wi ? ' morte en hivernage' : ' perdue') + tag); }
     if (m === 'queen') { const q = Q(scan.target), prev = h.queenId && h.queenId !== q.id ? Q(h.queenId) : null; h.queenId = q.id; addLog(h.id, prev ? 'Changement de reine' : 'Reine', prev ? qLabel(prev) + ' → ' + qLabel(q) : 'Reine ' + qLabel(q) + ' associée'); scanLog(hn(h) + ' ← reine ' + qLabel(q) + tag); }
-    if (m === 'harvest') { scan.hive = h.id; let n = 0; scan.pending.forEach(sid => { const s = S(sid); if (s && linkSuper(s, h)) n++; }); scan.pending = []; scanLog(hn(h) + ' sélectionnée' + (n ? ' · ' + n + ' hausse(s) liée(s)' : '') + tag); }
+    if (m === 'harvest') { scan.hive = h.id; let n = 0; const lgs = [], cds = []; scan.pending.forEach(sid => { const s = S(sid), l = s && linkSuper(s, h); if (l) { n++; lgs.push(l); cds.push(s.code); } }); scan.pending = []; scanLog(hn(h) + ' sélectionnée' + (n ? ' · ' + n + ' hausse(s) liée(s)' : '') + tag); if (n && scan.weigh) { save(); harvestForm({ hive: h, supers: cds, logs: lgs }); } }
     if (m === 'move' || m === 'feed' || m === 'treat') { if (scan.batch.includes(h.id)) scanLog(hn(h) + ' déjà dans la liste', true); else { scan.batch.push(h.id); scanLog(hn(h) + ' ajoutée (' + scan.batch.length + ')' + tag); } }
     if (m === 'winter' && scan.wact === 'out') { const a = A(scan.target); if (a) h.apiaryId = a.id; h.status = 'active'; addLog(h.id, 'Sortie d’hivernage', a ? 'Sortie d’hivernage vers ' + a.name : 'Sortie d’hivernage'); scanLog(hn(h) + ' sortie d’hivernage' + (a ? ' → ' + a.name : '') + tag); }
     else if (m === 'winter') { const a = A(scan.target); h.apiaryId = a.id; h.status = 'hivernage'; addLog(h.id, 'Hivernage', 'Hivernage à ' + a.name); scanLog(hn(h) + ' hivernage à ' + a.name + tag); }
@@ -507,7 +520,7 @@ function handleScan(raw, force) {
     let s = superByCode(p.code); if (!s) s = newSuper(p.code);
     if (m === 'harvest') {
       const h = H(scan.hive);
-      if (h) { scanLog(linkSuper(s, h) ? 'Hausse ' + s.code + ' → ruche ' + h.code : 'Hausse ' + s.code + ' déjà liée à la ruche ' + h.code); } else { scan.pending.push(s.id); scanLog('Hausse ' + s.code + ' en attente : scannez sa ruche'); }
+      if (h) { const l = linkSuper(s, h); scanLog(l ? 'Hausse ' + s.code + ' → ruche ' + h.code : 'Hausse ' + s.code + ' déjà liée à la ruche ' + h.code); if (l && scan.weigh) { save(); harvestForm({ hive: h, supers: [s.code], logs: [l] }); } } else { scan.pending.push(s.id); scanLog('Hausse ' + s.code + ' en attente : scannez sa ruche'); }
     } else { const h = H(s.hiveId); scanLog('Hausse ' + s.code + (h ? ' sur la ruche ' + h.code : ' (libre)')); }
   } else if (p.t === 'Q') {
     const q = queenByCode(p.code) || queenByCode(String(raw).trim());
@@ -545,6 +558,197 @@ function stopCam() {
   const b = $('#camBtn'); if (b) b.textContent = 'Activer la caméra';
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopCam(); });
+
+
+/* ================= récoltes ================= */
+const r2 = n => Math.round(n * 100) / 100;
+const KG = n => String(r2(n)).replace('.', ',') + ' kg';
+const hiveLabel = r => { const h = H(r.hiveId); return h ? hn(h) : 'Ruche ' + r.hiveCode; };
+const hvApiary = r => { const a = A(r.apiaryId); return a ? a.name : (r.apiary || 'Sans rucher'); };
+const hvQueen = r => { const q = Q(r.queenId); return q ? qLabel(q) : (r.queen || 'Sans reine'); };
+const HGROUPS = [['apiary', 'Rucher'], ['hive', 'Ruche'], ['queen', 'Reine'], ['honey', 'Type de miel'], ['month', 'Mois'], ['year', 'Année']];
+function hvKey(r, g) {
+  const d = new Date(r.ts);
+  if (g === 'apiary') return [hvApiary(r), hvApiary(r)];
+  if (g === 'hive') return [String(r.hiveCode).padStart(8, '0'), hiveLabel(r)];
+  if (g === 'queen') return [hvQueen(r), hvQueen(r)];
+  if (g === 'honey') return [r.honey || 'Non précisé', r.honey || 'Non précisé'];
+  if (g === 'month') return [d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'), d.toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' })];
+  return [String(d.getFullYear()), String(d.getFullYear())];
+}
+function harvestForm(o) {
+  o = o || {}; const rec = o.rec || null, h = o.hive || (rec && H(rec.hiveId));
+  db.honeys = db.honeys || [];
+  const honey0 = rec ? rec.honey : (db.lastHoney || (db.honeys[0] && db.honeys[0].name) || '');
+  const hopts = db.honeys.map(m => [m.name, m.name]); if (honey0 && !db.honeys.some(m => m.name === honey0)) hopts.push([honey0, honey0]);
+  const fields = [];
+  if (!h) fields.push({ name: 'hiveId', label: 'Ruche', type: 'select', options: hiveOptions('— Choisir —'), value: '' });
+  fields.push(whenField(rec ? rec.ts : 0),
+    { name: 'honey', label: 'Type de miel', type: 'select', options: hopts, value: honey0 },
+    { name: 'newhoney', label: 'Ou créer un nouveau type de miel', value: '', placeholder: 'ex. Colza, Montagne…' },
+    { name: 'gross', label: 'Poids brut (kg) — hausse pleine', value: rec && rec.gross ? String(rec.gross).replace('.', ',') : '', inputmode: 'decimal' },
+    { name: 'tare', label: 'Tare (kg) — hausse vide', value: rec ? (rec.tare ? String(rec.tare).replace('.', ',') : '') : (db.lastTare ? String(db.lastTare).replace('.', ',') : ''), inputmode: 'decimal' },
+    { name: 'net', label: 'Poids net de miel (kg) — calculé si brut et tare sont remplis', value: rec ? String(rec.weight).replace('.', ',') : '', inputmode: 'decimal' },
+    { name: 'supers', label: 'Numéros de hausses (facultatif, ex. 12, 13)', value: rec ? (rec.supers || []).join(', ') : (o.supers || []).join(', ') },
+    { name: 'note', label: 'Note', type: 'textarea', value: rec ? rec.note : '' });
+  form({
+    title: (rec ? 'Récolte' : 'Nouvelle récolte') + (h ? ' · ' + hn(h) : ''), fields,
+    extra: rec ? '<div class="actions"><button type="button" class="small danger" data-act="delHarvest" data-id="' + rec.id + '">Supprimer cette récolte</button></div>' : '',
+    onSubmit(v) {
+      const hv = h || H(v.hiveId); if (!hv) { toast('Choisissez la ruche'); return false; }
+      const g = num(v.gross), t = num(v.tare) || 0; let net = num(v.net);
+      if (!(net > 0) && g > 0) net = g - t;
+      if (!(net > 0)) { toast('Indiquez le poids de miel'); return false; }
+      let honey = v.newhoney || v.honey;
+      if (v.newhoney && !db.honeys.some(m => m.name.toLowerCase() === v.newhoney.toLowerCase())) db.honeys.push({ id: uid(), name: v.newhoney });
+      const codes = v.supers.split(/[\s,;]+/).filter(Boolean);
+      codes.forEach(cd => { const sp = superByCode(cd) || newSuper(cd); if (sp.hiveId !== hv.id) { sp.hiveId = hv.id; sp.since = today(); } });
+      const ts = fromLocalInput(v.when), a = A(hv.apiaryId), q = Q(hv.queenId);
+      const r = rec || { id: uid(), hiveId: hv.id, hiveCode: hv.code, apiaryId: hv.apiaryId, apiary: a ? a.name : '', queenId: hv.queenId, queen: q ? qLabel(q) : '' };
+      Object.assign(r, { ts, supers: codes, gross: g > 0 ? r2(g) : 0, tare: t > 0 ? r2(t) : 0, weight: r2(net), honey, note: v.note });
+      const text = (codes.length ? 'Hausse' + (codes.length > 1 ? 's' : '') + ' ' + codes.join(', ') + ' · ' : '') + KG(net) + (honey ? ' · ' + honey : '') + (v.note ? '\n' + v.note : '');
+      const data = { weight: r.weight, honey, supers: codes };
+      let lg = rec ? db.logs.find(l => l.id === rec.logId) : (o.logs && o.logs[0]);
+      if (!rec && o.logs) o.logs.slice(1).forEach(x => { db.logs = db.logs.filter(l => l.id !== x.id); });
+      if (lg) { lg.ts = ts; lg.note = text; lg.data = data; } else lg = addLog(hv.id, 'Récolte', text, data, ts);
+      r.logId = lg.id;
+      if (!rec) { db.harvests = db.harvests || []; db.harvests.push(r); }
+      if (t > 0) db.lastTare = r2(t); if (honey) db.lastHoney = honey;
+      save(); render(true); toast('Récolte enregistrée : ' + KG(net));
+    }
+  });
+  const f = $('#f').elements, upd = () => { const g = num(f.gross.value), t = num(f.tare.value) || 0; if (g > 0) f.net.value = String(r2(Math.max(0, g - t))).replace('.', ','); };
+  f.gross.oninput = upd; f.tare.oninput = upd;
+}
+VIEWS.recoltes = () => {
+  const all = (db.harvests || []).slice().sort((a, b) => b.ts - a.ts);
+  const years = [...new Set(all.map(r => new Date(r.ts).getFullYear()))].sort((a, b) => b - a);
+  if (ui.hy === undefined || (ui.hy !== 'all' && !years.includes(Number(ui.hy)))) ui.hy = years.length ? String(years[0]) : 'all';
+  ui.hg = ui.hg || 'apiary';
+  const recs = ui.hy === 'all' ? all : all.filter(r => new Date(r.ts).getFullYear() === Number(ui.hy));
+  const total = recs.reduce((x, r) => x + r.weight, 0), hv = new Set(recs.map(r => r.hiveId + '|' + r.hiveCode));
+  const groups = {};
+  recs.forEach(r => { const [k, l] = hvKey(r, ui.hg); const g = groups[k] || (groups[k] = { k, label: l, kg: 0, n: 0, hives: new Set() }); g.kg += r.weight; g.n++; g.hives.add(r.hiveId + '|' + r.hiveCode); });
+  let rows = Object.values(groups);
+  rows = (ui.hg === 'month' || ui.hg === 'year' || ui.hg === 'hive') ? rows.sort((a, b) => nat(a.k, b.k)) : rows.sort((a, b) => b.kg - a.kg);
+  const max = Math.max(1, ...rows.map(r => r.kg));
+  let html = '<div class="actions"><select id="hy" style="flex:1"><option value="all"' + (ui.hy === 'all' ? ' selected' : '') + '>Toutes les années</option>' + years.map(y => '<option value="' + y + '"' + (String(y) === String(ui.hy) ? ' selected' : '') + '>' + y + '</option>').join('') + '</select></div>';
+  html += '<div class="sums"><div class="sum"><b>' + KG(total) + '</b><span>total</span></div><div class="sum"><b>' + recs.length + '</b><span>récolte' + (recs.length > 1 ? 's' : '') + '</span></div><div class="sum"><b>' + hv.size + '</b><span>ruche' + (hv.size > 1 ? 's' : '') + '</span></div><div class="sum"><b>' + (hv.size ? KG(total / hv.size) : '—') + '</b><span>moyenne / ruche</span></div></div>';
+  html += '<h2>Totaux par…</h2><div class="hgroups">' + HGROUPS.map(g => '<button class="small' + (ui.hg === g[0] ? ' on' : '') + '" data-act="hGroup" data-g="' + g[0] + '">' + g[1] + '</button>').join('') + '</div>';
+  html += rows.length ? rows.map(r => '<div class="hrow"><div class="hl"><span>' + esc(r.label) + '</span><b>' + KG(r.kg) + '</b></div><div class="bar"><i style="width:' + Math.max(2, Math.round(r.kg / max * 100)) + '%"></i></div><div class="hint">' + r.n + ' récolte' + (r.n > 1 ? 's' : '') + (ui.hg !== 'hive' ? ' · ' + KG(r.kg / r.hives.size) + ' / ruche' : '') + '</div></div>').join('') : empty('Aucune récolte', 'Touchez « + Récolte », ou scannez la tuile Récolte de l’accueil.');
+  html += '<h2>Détail (' + recs.length + ')</h2>' + recs.map(r => '<div class="item" data-act="editHarvest" data-id="' + r.id + '"><div class="grow"><div class="t">' + esc(hiveLabel(r)) + ' · ' + KG(r.weight) + '</div><div class="s">' + fmtDate(r.ts) + (r.honey ? ' · ' + esc(r.honey) : '') + ' · ' + esc(hvApiary(r)) + ((r.supers || []).length ? ' · hausse' + (r.supers.length > 1 ? 's ' : ' ') + esc(r.supers.join(', ')) : '') + '</div></div><span class="chev">›</span></div>').join('');
+  html += '<div class="actions"><button class="small" data-act="exportCsv" data-k="recoltes">Exporter en CSV</button></div>';
+  return { title: 'Récoltes', back: '#/plus', html, actions: '<button data-act="addHarvest">+ Récolte</button>', after() { const y = $('#hy'); if (y) y.onchange = e => { ui.hy = e.target.value; render(true); }; } };
+};
+function hiveHarvestHtml(h) {
+  const hr = (db.harvests || []).filter(r => r.hiveId === h.id).sort((a, b) => b.ts - a.ts); if (!hr.length) return '';
+  return '<h2>Récoltes · ' + KG(hr.reduce((x, r) => x + r.weight, 0)) + '</h2>' + hr.map(r => '<div class="item" data-act="editHarvest" data-id="' + r.id + '"><div class="grow"><div class="t">' + KG(r.weight) + (r.honey ? ' · ' + esc(r.honey) : '') + '</div><div class="s">' + fmtDate(r.ts) + '</div></div><span class="chev">›</span></div>').join('');
+}
+
+/* ================= varroa ================= */
+const VMETH = [['langes', 'Chute naturelle (langes)'], ['co2', 'CO₂ / lavage (sur un échantillon d’abeilles)']];
+const thr = m => ((db.varroaThr || {})[m]) || (m === 'co2' ? [2, 3] : [1, 5]);
+const vLevel = r => { const t = thr(r.method), v = r.value; return v < t[0] ? 0 : v < t[1] ? 1 : 2; };
+const vFmt = r => String(r2(r.value)).replace('.', ',') + (r.method === 'co2' ? ' %' : ' /jour');
+const VLEV = ['faible', 'attention', 'élevé'], VCLS = ['ok', 'warn', 'bad'];
+function varroaForm(o) {
+  o = o || {}; const rec = o.rec || null, h = o.hive || (rec && H(rec.hiveId));
+  db.treatments = db.treatments || [];
+  const fields = [];
+  if (!h) fields.push({ name: 'hiveId', label: 'Ruche', type: 'select', options: hiveOptions('— Choisir —'), value: '' });
+  fields.push(whenField(rec ? rec.ts : 0), { name: 'method', label: 'Méthode de comptage', type: 'select', options: VMETH, value: rec ? rec.method : (db.lastVMethod || 'langes') },
+    { name: 'count', label: 'Varroas comptés', value: rec ? rec.count : '', inputmode: 'numeric' },
+    { type: 'html', html: '<div id="vr-langes"><label>Durée de pose des langes (jours)</label><input name="days" inputmode="decimal" value="' + (rec && rec.days ? rec.days : (db.lastDays || 3)) + '" autocomplete="off"></div><div id="vr-co2"><label>Nombre d’abeilles de l’échantillon</label><input name="bees" inputmode="numeric" value="' + (rec && rec.bees ? rec.bees : 300) + '" autocomplete="off"></div><div id="vr-res" class="band"></div>' });
+  if (!rec) fields.push({ name: 'trt', label: 'Traitement décidé suite à ce comptage (facultatif)', type: 'select', options: [['', '— Aucun —']].concat(db.treatments.map(t => [t.name, t.name])), value: '' });
+  fields.push({ name: 'note', label: 'Note', type: 'textarea', value: rec ? rec.note : '' });
+  const calc = el => {
+    const m = el.method.value, c = parseInt(el.count.value, 10); if (!(c >= 0)) return null;
+    if (m === 'co2') { const b = num(el.bees.value); if (!(b > 0)) return null; return { method: m, count: c, bees: b, value: c / b * 100 }; }
+    const d = num(el.days.value); if (!(d > 0)) return null; return { method: m, count: c, days: d, value: c / d };
+  };
+  form({
+    title: (rec ? 'Comptage Varroa' : 'Comptage Varroa') + (h ? ' · ' + hn(h) : ''), fields, submit: 'Enregistrer',
+    extra: rec ? '<div class="actions"><button type="button" class="small danger" data-act="delVarroa" data-id="' + rec.id + '">Supprimer ce comptage</button></div>' : '',
+    onSubmit(v) {
+      const el = $('#f').elements, hv = h || H(v.hiveId); if (!hv) { toast('Choisissez la ruche'); return false; }
+      const c = calc(el); if (!c) { toast(el.method.value === 'co2' ? 'Indiquez le nombre de varroas et d’abeilles' : 'Indiquez le nombre de varroas et la durée'); return false; }
+      const ts = fromLocalInput(v.when), a = A(hv.apiaryId);
+      const r = rec || { id: uid(), hiveId: hv.id, hiveCode: hv.code, apiaryId: hv.apiaryId };
+      Object.assign(r, c, { ts, value: r2(c.value), note: v.note }); if (c.method === 'co2') delete r.days; else delete r.bees;
+      const lv = vLevel(r);
+      const text = (c.method === 'co2' ? 'CO₂ / lavage : ' + c.count + ' varroa(s) sur ' + c.bees + ' abeilles = ' : 'Chute naturelle : ' + c.count + ' varroa(s) en ' + c.days + ' j = ') + vFmt(r) + ' (' + VLEV[lv] + ')' + (v.note ? '\n' + v.note : '');
+      const data = { varroa: { method: c.method, count: c.count, value: r.value, level: lv } };
+      let lg = rec ? db.logs.find(l => l.id === rec.logId) : null;
+      if (lg) { lg.ts = ts; lg.note = text; lg.data = data; } else lg = addLog(hv.id, 'Varroa', text, data, ts);
+      r.logId = lg.id;
+      if (!rec) { db.varroa = db.varroa || []; db.varroa.push(r); if (v.trt) addLog(hv.id, 'Traitement', v.trt + ' (suite au comptage varroa)', { treatments: [v.trt] }, ts + 1000); }
+      db.lastVMethod = c.method; if (c.days) db.lastDays = c.days;
+      save(); render(true); toast('Varroa : ' + vFmt(r) + ' · ' + VLEV[lv]);
+    }
+  });
+  const el = $('#f').elements, paint = () => {
+    const m = el.method.value; $('#vr-langes').hidden = m !== 'langes'; $('#vr-co2').hidden = m !== 'co2';
+    const c = calc(el), b = $('#vr-res');
+    if (!c) { b.textContent = 'Résultat : —'; b.style.background = ''; b.style.color = ''; return; }
+    const lv = vLevel(c); b.textContent = 'Résultat : ' + vFmt(c) + ' · ' + VLEV[lv];
+    b.style.background = ['#dff1e2', '#fde4d6', '#f8c9c4'][lv]; b.style.color = ['#1e6b2e', '#a24a10', '#a3231a'][lv];
+  };
+  ['method', 'count', 'days', 'bees'].forEach(n => { el[n].oninput = paint; el[n].onchange = paint; });
+  paint();
+}
+function varChart(recs, h) {
+  const m = recs[0].method, [ta, tb] = thr(m), W = 320, HH = 140, L = 34, R = 10, T = 10, B = 22;
+  const trts = db.logs.filter(l => l.hiveId === h.id && l.type === 'Traitement' && l.ts >= recs[0].ts - 30 * 864e5 && l.ts <= recs[recs.length - 1].ts + 90 * 864e5);
+  const all = recs.map(r => r.ts).concat(trts.map(l => l.ts)), t0 = Math.min(...all), t1 = Math.max(...all), span = Math.max(t1 - t0, 1);
+  const vmax = Math.max(tb * 1.3, ...recs.map(r => r.value)) * 1.05;
+  const X = ts => t1 === t0 ? L + (W - L - R) / 2 : L + (ts - t0) / span * (W - L - R), Y = v => T + (1 - v / vmax) * (HH - T - B);
+  const band = (a, b, c) => '<rect x="' + L + '" y="' + Y(b) + '" width="' + (W - L - R) + '" height="' + Math.max(0, Y(a) - Y(b)) + '" fill="' + c + '" opacity=".16"/>';
+  let sv = '<svg class="vchart" viewBox="0 0 ' + W + ' ' + HH + '" role="img" aria-label="Évolution Varroa">' + band(0, ta, '#2f9e44') + band(ta, tb, '#e5702a') + band(tb, vmax, '#d33a2c');
+  sv += '<text x="' + (L - 4) + '" y="' + (HH - B + 3) + '" font-size="10" text-anchor="end" fill="currentColor" opacity=".7">0</text><text x="' + (L - 4) + '" y="' + (T + 8) + '" font-size="10" text-anchor="end" fill="currentColor" opacity=".7">' + r2(vmax) + '</text>';
+  trts.forEach(l => { sv += '<line x1="' + X(l.ts) + '" x2="' + X(l.ts) + '" y1="' + T + '" y2="' + (HH - B) + '" stroke="#e5702a" stroke-width="1.6" stroke-dasharray="4 3"/><text x="' + X(l.ts) + '" y="' + (T - 1) + '" font-size="9" text-anchor="middle" fill="#e5702a">T</text>'; });
+  sv += '<polyline fill="none" stroke="currentColor" stroke-width="2" points="' + recs.map(r => X(r.ts) + ',' + Y(r.value)).join(' ') + '"/>';
+  recs.forEach(r => { sv += '<circle cx="' + X(r.ts) + '" cy="' + Y(r.value) + '" r="4.5" fill="' + ['#2f9e44', '#e5702a', '#d33a2c'][vLevel(r)] + '" stroke="#fff" stroke-width="1.5"/>'; });
+  const sd = ts => new Date(ts).toLocaleDateString('fr-CH', { day: '2-digit', month: 'short' });
+  sv += '<text x="' + L + '" y="' + (HH - 6) + '" font-size="10" fill="currentColor" opacity=".7">' + sd(t0) + '</text>' + (t1 !== t0 ? '<text x="' + (W - R) + '" y="' + (HH - 6) + '" font-size="10" text-anchor="end" fill="currentColor" opacity=".7">' + sd(t1) + '</text>' : '') + '</svg>';
+  return '<div class="card"><b>' + (VMETH.find(x => x[0] === m) || [0, m])[1] + '</b> <span class="hint">(' + (m === 'co2' ? 'en %' : 'varroas par jour') + ')</span>' + sv + '<div class="hint">Repères : vert &lt; ' + ta + ', orange jusqu’à ' + tb + ', rouge au-delà (modifiables dans Plus → Suivi Varroa → Seuils). « T » = traitement.</div></div>';
+}
+function hiveVarroaHtml(h) {
+  const vr = (db.varroa || []).filter(r => r.hiveId === h.id).sort((a, b) => a.ts - b.ts); if (!vr.length) return '';
+  let html = '<h2>Varroa (' + vr.length + ')</h2>';
+  ['langes', 'co2'].forEach(m => { const rs = vr.filter(r => r.method === m); if (rs.length) html += varChart(rs, h); });
+  html += vr.slice().reverse().map(r => '<div class="item" data-act="editVarroa" data-id="' + r.id + '"><div class="grow"><div class="t"><span class="badge ' + VCLS[vLevel(r)] + '">' + vFmt(r) + '</span> ' + (r.method === 'co2' ? 'CO₂' : 'Langes') + ' · ' + r.count + ' varroa' + (r.count > 1 ? 's' : '') + '</div><div class="s">' + fmtDate(r.ts) + '</div></div><span class="chev">›</span></div>').join('');
+  return html;
+}
+VIEWS.varroa = () => {
+  const vr = (db.varroa || []).slice(); ui.vap = ui.vap || '';
+  const byHive = {}; vr.sort((a, b) => a.ts - b.ts).forEach(r => { (byHive[r.hiveId] = byHive[r.hiveId] || []).push(r); });
+  let list = Object.keys(byHive).map(id => { const h = H(id); return h ? { h, rs: byHive[id] } : null; }).filter(Boolean).filter(x => !ui.vap || x.h.apiaryId === ui.vap);
+  list.forEach(x => { x.last = x.rs[x.rs.length - 1]; x.lv = vLevel(x.last); });
+  list.sort((a, b) => b.lv - a.lv || b.last.ts - a.last.ts);
+  const counted = new Set(list.map(x => x.h.id)), never = db.hives.filter(h => h.status !== 'morte' && h.status !== 'vendue' && (!ui.vap || h.apiaryId === ui.vap) && !counted.has(h.id)).length;
+  let html = '<div class="actions"><select id="vap" style="flex:1">' + apiaryOptions('Tous les ruchers').map(o => '<option value="' + esc(o[0]) + '"' + (ui.vap === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select></div>';
+  html += '<div class="sums"><div class="sum"><b>' + list.filter(x => x.lv === 2).length + '</b><span>élevé</span></div><div class="sum"><b>' + list.filter(x => x.lv === 1).length + '</b><span>attention</span></div><div class="sum"><b>' + list.filter(x => x.lv === 0).length + '</b><span>faible</span></div><div class="sum"><b>' + never + '</b><span>jamais comptées</span></div></div>';
+  html += '<h2>Dernier comptage par ruche</h2>' + (list.length ? list.map(x => {
+    const prev = x.rs.filter(r => r.method === x.last.method).slice(-2, -1)[0], trend = prev ? (x.last.value > prev.value ? ' ↗' : x.last.value < prev.value ? ' ↘' : ' →') : '';
+    const tl = db.logs.filter(l => l.hiveId === x.h.id && l.type === 'Traitement').sort((a, b) => b.ts - a.ts)[0];
+    return '<a class="item" href="#/ruche/' + x.h.id + '"><div class="grow"><div class="t">' + esc(hn(x.h)) + ' <span class="badge ' + VCLS[x.lv] + '">' + vFmt(x.last) + trend + '</span></div><div class="s">' + fmtDate(x.last.ts) + ' · ' + (x.last.method === 'co2' ? 'CO₂' : 'langes') + (tl ? ' · dernier traitement : ' + esc(String(tl.note).split(' (suite')[0].split('\n')[0]) + ' le ' + fmtDate(tl.ts) : ' · aucun traitement noté') + '</div></div><span class="chev">›</span></a>';
+  }).join('') : empty('Aucun comptage', 'Touchez « + Comptage » ou scannez la tuile Varroa.'));
+  html += '<div class="actions"><button class="small" data-act="varroaThr">Seuils</button><button class="small" data-act="exportCsv" data-k="varroa">Exporter en CSV</button></div><p class="hint">Les seuils (vert / orange / rouge) sont des repères indicatifs à adapter à ta façon de travailler.</p>';
+  return { title: 'Suivi Varroa', back: '#/plus', html, actions: '<button data-act="addVarroa">+ Comptage</button>', after() { const s = $('#vap'); if (s) s.onchange = e => { ui.vap = e.target.value; render(true); }; } };
+};
+function thrForm() {
+  const a = thr('langes'), b = thr('co2'), f = n => String(n).replace('.', ',');
+  form({
+    title: 'Seuils Varroa (indicatifs)',
+    fields: [{ type: 'html', html: '<div class="hint">En dessous du 1er seuil : faible (vert). Entre les deux : attention (orange). Au-delà du 2e : élevé (rouge).</div>' },
+      { name: 'la', label: 'Langes : attention à partir de (varroas / jour)', value: f(a[0]), inputmode: 'decimal' }, { name: 'lb', label: 'Langes : élevé à partir de (varroas / jour)', value: f(a[1]), inputmode: 'decimal' },
+      { name: 'ca', label: 'CO₂ / lavage : attention à partir de (%)', value: f(b[0]), inputmode: 'decimal' }, { name: 'cb', label: 'CO₂ / lavage : élevé à partir de (%)', value: f(b[1]), inputmode: 'decimal' }],
+    onSubmit(v) {
+      const x = [num(v.la), num(v.lb), num(v.ca), num(v.cb)]; if (x.some(n => !(n > 0)) || x[0] >= x[1] || x[2] >= x[3]) { toast('Seuils invalides (le 2e doit dépasser le 1er)'); return false; }
+      db.varroaThr = { langes: [x[0], x[1]], co2: [x[2], x[3]] }; save(); render(true);
+    }
+  });
+}
 
 /* ================= formulaires métier ================= */
 function apiaryForm(a) {
@@ -678,6 +882,8 @@ function logForm(h) {
   sync();
   f.addEventListener('click', e => {
     const tt = e.target.closest('[data-type]');
+    if (tt && tt.dataset.type === 'Varroa') { closeSheet(); varroaForm({ hive: h }); return; }
+    if (tt && tt.dataset.type === 'Récolte') { closeSheet(); harvestForm({ hive: h }); return; }
     if (tt) { f.elements.type.value = tt.dataset.type; f.querySelectorAll('[data-type]').forEach(b => b.classList.toggle('on', b === tt)); sync(); return; }
     const tb = e.target.closest('.tri button');
     if (tb) {
@@ -823,6 +1029,8 @@ const EXPORTS = {
   hausses: () => [['Numéro', 'Ruche', 'Depuis']].concat(db.supers.slice().sort((a, b) => nat(a.code, b.code)).map(s => { const h = H(s.hiveId); return [s.code, h ? h.code : '', s.since || '']; })),
   reines: () => [['Identifiant', 'Année', 'Couleur', 'Lignée', 'Mère', 'Ruche', 'Note']].concat(db.queens.map(q => { const c = qcolor(q.year), m = Q(q.motherId), h = db.hives.find(x => x.queenId === q.id); return [q.code, q.year, c ? c[0] : '', q.lineage, m ? m.code : '', h ? h.code : '', q.note]; })),
   journal: () => [['Date', 'Ruche', 'Rucher', 'Type', 'Reine', 'Pontes', 'Cadres gaufrés', 'Cadres construits', 'Cadres à mâles', 'Partitions', 'Note']].concat(db.logs.slice().sort((a, b) => a.ts - b.ts).map(l => { const h = H(l.hiveId), a = h && A(h.apiaryId), d = l.data || {}, aj = d.ajout || {}; return [new Date(l.ts).toLocaleString('fr-CH'), h ? h.code : '', a ? a.name : '', l.type, d.reine ? d.reine.toUpperCase() : '', d.pontes ? d.pontes.toUpperCase() : '', aj.gaufre || '', aj.construit || '', aj.males || '', aj.partition || '', l.note]; })),
+  recoltes: () => [['Date', 'Ruche', 'Rucher', 'Reine', 'Hausses', 'Poids brut (kg)', 'Tare (kg)', 'Poids net (kg)', 'Type de miel', 'Note']].concat((db.harvests || []).slice().sort((a, b) => a.ts - b.ts).map(r => [new Date(r.ts).toLocaleDateString('fr-CH'), hiveLabel(r), hvApiary(r), hvQueen(r), (r.supers || []).join(' '), r.gross ? String(r.gross).replace('.', ',') : '', r.tare ? String(r.tare).replace('.', ',') : '', String(r.weight).replace('.', ','), r.honey || '', r.note || ''])),
+  varroa: () => [['Date', 'Ruche', 'Rucher', 'Méthode', 'Comptage', 'Durée (jours)', 'Abeilles', 'Résultat', 'Unité', 'Niveau', 'Note']].concat((db.varroa || []).slice().sort((a, b) => a.ts - b.ts).map(r => { const h = H(r.hiveId), a = h && A(h.apiaryId); return [new Date(r.ts).toLocaleDateString('fr-CH'), h ? hn(h) : 'Ruche ' + r.hiveCode, a ? a.name : '', (VMETH.find(m => m[0] === r.method) || [0, r.method])[1], r.count, r.days || '', r.bees || '', String(r2(r.value)).replace('.', ','), r.method === 'co2' ? '%' : 'par jour', ['faible', 'attention', 'élevé'][vLevel(r)], r.note || '']; })),
   taches: () => [['Tâche', 'Rucher', 'Échéance', 'Faite']].concat(db.tasks.map(t => { const a = A(t.apiaryId); return [t.text, a ? a.name : '', t.due || '', t.done ? 'oui' : '']; }))
 };
 async function saveFile(name, text, mime) {
@@ -916,6 +1124,14 @@ const ACT = {
   batchDel(el) { scan.batch = scan.batch.filter(id => id !== el.dataset.id); paintScan(); },
   batchClear() { scan.batch = []; paintScan(); },
   batchOk() { if (scan.mode === 'move') moveBatchForm(); else if (scan.mode === 'treat') prodBatchForm('treat'); else prodBatchForm('feed'); },
+  hGroup(el) { ui.hg = el.dataset.g; render(true); },
+  addHarvest() { harvestForm({}); },
+  editHarvest(el) { const r = (db.harvests || []).find(x => x.id === el.dataset.id); if (r) harvestForm({ rec: r }); },
+  delHarvest(el) { const r = (db.harvests || []).find(x => x.id === el.dataset.id); if (!r || !confirm('Supprimer cette récolte ?')) return; db.harvests = db.harvests.filter(x => x.id !== r.id); db.logs = db.logs.filter(l => l.id !== r.logId); save(); closeSheet(); render(true); },
+  addVarroa() { varroaForm({}); },
+  editVarroa(el) { const r = (db.varroa || []).find(x => x.id === el.dataset.id); if (r) varroaForm({ rec: r }); },
+  delVarroa(el) { const r = (db.varroa || []).find(x => x.id === el.dataset.id); if (!r || !confirm('Supprimer ce comptage ?')) return; db.varroa = db.varroa.filter(x => x.id !== r.id); db.logs = db.logs.filter(l => l.id !== r.logId); save(); closeSheet(); render(true); },
+  varroaThr() { thrForm(); },
   feedNew() { prodNew('feed'); },
   trtNew() { prodNew('treat'); },
   feedDel(el) { prodDel('feed', el); },
@@ -935,7 +1151,7 @@ document.addEventListener('click', e => {
 document.addEventListener('change', e => { const el = e.target; if (el.tagName === 'INPUT' && el.dataset.act) ACT[el.dataset.act](el); });
 
 /* ================= routeur ================= */
-const TABS = { accueil: 'accueil', ruchers: 'ruchers', rucher: 'ruchers', ruches: 'ruches', ruche: 'ruches', scan: 'scan', plus: 'plus', taches: 'plus', reines: 'plus', hausses: 'plus', etiquettes: 'plus' };
+const TABS = { recoltes: 'plus', varroa: 'plus', accueil: 'accueil', ruchers: 'ruchers', rucher: 'ruchers', ruches: 'ruches', ruche: 'ruches', scan: 'scan', plus: 'plus', taches: 'plus', reines: 'plus', hausses: 'plus', etiquettes: 'plus' };
 function render(keepScroll) {
   stopCam();
   const parts = (location.hash || '#/accueil').replace(/^#\//, '').split('/');

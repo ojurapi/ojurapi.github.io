@@ -1,5 +1,5 @@
 // Service worker : met toute l'application en cache pour un usage 100 % hors ligne.
-const CACHE = 'ojurapi-v15';
+const CACHE = 'ojurapi-v17';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'lib/qrcode.js', 'lib/jsQR.js', 'lib/leaflet/leaflet.js', 'lib/leaflet/leaflet.css',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png', 'icons/icon-maskable-512.png'];
 

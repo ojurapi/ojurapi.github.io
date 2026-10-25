@@ -206,3 +206,16 @@ input[type=datetime-local]{width:100%;font:inherit}
 .typegrid .ico::before{content:'';position:absolute;inset:0;border-radius:50%;background:var(--c);opacity:.16}
 .typegrid .ico svg{position:relative;width:28px;height:28px;margin:0;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .typegrid button{min-height:80px}
+
+.badge.bad{background:#f8c9c4;color:#a3231a}
+@media (prefers-color-scheme:dark){.badge.bad{background:#5a1a14;color:#ffb4aa}}
+.sums{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}
+.sum{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;text-align:center}
+.sum b{display:block;font-size:20px}.sum span{font-size:12px;color:var(--mute)}
+.hgroups{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+.hgroups button.on{background:var(--honey);color:#fff;border-color:var(--honey)}
+.hrow{margin:0 0 12px}.hrow .hl{display:flex;justify-content:space-between;gap:8px}
+.bar{height:12px;border-radius:99px;background:var(--line);overflow:hidden;margin:4px 0}
+.bar i{display:block;height:100%;background:var(--honey);border-radius:99px}
+.vchart{width:100%;height:auto;display:block;margin:6px 0;color:var(--ink)}
+a.button{display:inline-block;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);text-decoration:none;font-weight:650}
