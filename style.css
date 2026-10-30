@@ -223,3 +223,27 @@ a.button{display:inline-block;padding:10px 14px;border-radius:12px;border:1px so
 .syncdot{position:fixed;top:5px;right:5px;z-index:30;width:9px;height:9px;border-radius:50%;background:#2f9e44;box-shadow:0 0 0 2px rgba(255,255,255,.7)}
 .syncdot.busy{background:#e5a31c}.syncdot.err{background:#d33a2c}
 input[type=password],input[type=email]{width:100%;font:inherit}
+
+/* ruche : tuiles d'action en bas (gants, gaucher/droitier) + page centrée */
+.hivepage{text-align:center}
+.hivepage .row,.hivepage .item{justify-content:center;text-align:center}
+.hivepage .row .grow{flex:0 1 auto}
+.hivepage .actions{justify-content:center}
+.hivepage .tl{border-left:0;margin-left:0;padding-left:0}
+.hivepage .tl .e{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.hivepage .tl .e.todo{border-left:1px solid var(--line);border-top:3px solid #e5702a;padding-left:12px}
+body.hasdock main{padding-bottom:210px}
+.dock{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));z-index:19;max-width:680px;margin:0 auto;padding:8px 10px;
+  background:var(--bg);border-top:1px solid var(--line);box-shadow:0 -6px 16px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:8px}
+.dock[hidden]{display:none}
+.dockrow{display:flex;justify-content:center;gap:8px}
+.dt{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:74px;padding:6px 4px;border-radius:18px;
+  background:var(--card);border:2px solid var(--line);color:var(--ink,inherit);font:inherit;font-weight:650;font-size:14px;box-shadow:var(--shadow)}
+.dt:active{transform:scale(.97);border-color:var(--c)}
+.dt .ti{position:relative;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--c)}
+.dt .ti::before{content:'';position:absolute;inset:0;border-radius:50%;background:var(--c);opacity:.16}
+.dt .ti svg{position:relative;width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.dt.big{flex:1.5;min-height:92px;font-size:16px;border-color:var(--c);background:var(--honey-l)}
+.dt.big .ti{width:52px;height:52px}.dt.big .ti svg{width:34px;height:34px}
+.dt.on{border-color:var(--c);background:#fdeede}
+.hivepage .card a{color:var(--honey-d);font-weight:700;font-size:17px}

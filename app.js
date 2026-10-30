@@ -306,13 +306,16 @@ VIEWS.ruche = id => {
   html += '<div style="margin-top:8px">' + (q ? (c ? '<span class="dot" style="background:' + c[1] + '"></span> ' : '') + 'Reine <b>' + esc(qLabel(q)) + '</b>' + (q.lineage ? ' · ' + esc(q.lineage) : '') : '<span class="hint">Pas de reine associée</span>') + '</div>';
   if (h.note) html += '<div style="margin-top:8px">' + esc(h.note).replace(/\n/g, '<br>') + '</div>';
   if (h.flag && h.todo) html += '<div style="margin-top:8px"><span class="badge warn">À faire</span> ' + esc(h.todo).replace(/\n/g, '<br>') + '</div>';
-  html += '</div><div class="actions"><button class="primary small" data-act="addLog" data-id="' + h.id + '">+ Intervention</button><button class="small" data-act="toggleFlag" data-id="' + h.id + '">' + (h.flag ? '⚐ Retirer le signal' : '⚑ À surveiller') + '</button><button class="small" data-act="moveHive" data-id="' + h.id + '">Déplacer</button><button class="small" data-act="hiveQr" data-id="' + h.id + '">QR</button><button class="small" data-act="editHive" data-id="' + h.id + '">Modifier</button><button class="small danger" data-act="delHive" data-id="' + h.id + '">Supprimer</button></div>';
+  html += '</div>';
   html += '<h2>Hausses (' + supers.length + ')</h2>' + (supers.length ? supers.map(s => '<div class="item"><div class="grow"><div class="t">Hausse ' + esc(s.code) + '</div><div class="s">' + (s.since ? 'depuis le ' + fmtDate(s.since) : '') + '</div></div><button class="small" data-act="unlinkSuper" data-id="' + s.id + '">Retirer</button></div>').join('') : '<div class="hint">Aucune hausse.</div>');
-  html += '<div class="actions"><button class="small" data-act="addSuperTo" data-id="' + h.id + '">+ Ajouter une hausse</button></div>';
   html += hiveHarvestHtml(h) + hiveVarroaHtml(h);
   html += '<h2>Journal</h2>' + (logs.length ? '<div class="tl">' + logs.map(l => '<div class="e edl' + (isTodo(l) ? ' todo' : '') + '" data-act="editLog" data-id="' + l.id + '"><b>' + esc(l.type) + '</b> <small>' + fmtTime(l.ts) + '</small>' + logDetail(l) + (l.note ? '<div>' + esc(l.note).replace(/\n/g, '<br>') + '</div>' : '') + '</div>').join('') + '</div>' : '<div class="hint">Aucune intervention enregistrée.</div>');
   if (logs.length) html += '<p class="hint">Touchez une ligne pour modifier sa date, son heure ou sa note.</p>';
-  return { title: hn(h), back: '#/ruches', html };
+  html += '<div class="actions"><button class="small danger" data-act="delHive" data-id="' + h.id + '">Supprimer cette ruche</button></div>';
+  const dt = (act, ic, col, label, cls) => '<button class="dt ' + (cls || '') + '" data-act="' + act + '" data-id="' + h.id + '" style="--c:' + col + '"><span class="ti"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[ic] + '</svg></span>' + label + '</button>';
+  const dock = '<div class="dockrow">' + dt('moveHive', 'move', '#2f5bea', 'Déplacer') + dt('hiveQr', 'scan', '#57534e', 'QR') + dt('editHive', 'settings', '#a86f00', 'Modifier') + '</div>' +
+    '<div class="dockrow">' + dt('addSuperTo', 'supers', '#0f766e', 'Hausse') + dt('addLog', 'plus', '#d99a1c', 'Intervention', 'big') + dt('toggleFlag', 'todo', '#e5702a', h.flag ? 'Retirer' : 'À surveiller', h.flag ? 'on' : '') + '</div>';
+  return { title: hn(h), back: '#/ruches', html: '<div class="hivepage">' + html + '</div>', dock };
 };
 
 function taskItem(t) {
@@ -1307,6 +1310,8 @@ function render(keepScroll) {
   $('#title').innerHTML = (out.back ? '<a class="back" href="' + out.back + '">‹</a> ' : '') + esc(out.title || "O Jur'Api");
   $('#topActions').innerHTML = out.actions || '';
   $('#view').innerHTML = out.html || '';
+  let dk = $('#dock'); if (!dk) { dk = document.createElement('div'); dk.id = 'dock'; dk.className = 'dock'; document.body.appendChild(dk); }
+  dk.innerHTML = out.dock || ''; dk.hidden = !out.dock; document.body.classList.toggle('hasdock', !!out.dock);
   document.querySelectorAll('#tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === TABS[route]));
   if (out.after) out.after();
   paintSync();
