@@ -19,8 +19,9 @@ function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY) || 'null'); if (d && Array.isArray(d.hives)) { const r = Object.assign(EMPTY(), d); (r.feeds || []).forEach(f => { if (f.name === 'Sirop 3:2') f.name = 'Sirop 70/30'; }); return r; } } catch (e) { /* ignore */ }
   return EMPTY();
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { toast('⚠ Impossible d’enregistrer (stockage plein ?)'); } }
-const uid = () => String(db.seq++);
+function saveRaw() { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { toast('⚠ Impossible d’enregistrer (stockage plein ?)'); } }
+function save() { saveRaw(); if (typeof schedSync === 'function') schedSync(); }
+const uid = () => String(db.seq++) + Math.random().toString(36).slice(2, 6);
 const A = id => db.apiaries.find(x => x.id === id);
 const H = id => db.hives.find(x => x.id === id);
 const Q = id => db.queens.find(x => x.id === id);
@@ -350,6 +351,7 @@ VIEWS.plus = () => {
   const days = db.lastBackup ? Math.floor((Date.now() - db.lastBackup) / 86400000) : null;
   let html = '';
   if (db.hives.length && (days === null || days > 30)) html += '<div class="card"><b>💾 Pensez à sauvegarder</b><div class="hint">' + (days === null ? 'Aucune sauvegarde faite.' : 'Dernière sauvegarde il y a ' + days + ' jours.') + ' Les données ne sont que sur ce téléphone.</div><div class="actions"><button class="primary small" data-act="backup">Sauvegarder maintenant</button></div></div>';
+  html += '<h2>Compte & synchronisation</h2><div class="card" id="syncCard">' + syncCardInner() + '</div>';
   html += '<h2>Gestion</h2><a class="item" href="#/recoltes"><div class="grow t">Récoltes & statistiques</div><span class="chev">›</span></a><a class="item" href="#/varroa"><div class="grow t">Suivi Varroa</div><span class="chev">›</span></a><a class="item" href="#/taches"><div class="grow t">Tâches</div><span class="chev">›</span></a><a class="item" href="#/reines"><div class="grow t">Reines & lignées</div><span class="chev">›</span></a><a class="item" href="#/hausses"><div class="grow t">Hausses</div><span class="chev">›</span></a><a class="item" href="#/etiquettes"><div class="grow t">Étiquettes QR à imprimer</div><span class="chev">›</span></a>';
   html += '<h2>Exporter pour Excel (CSV)</h2><div class="actions">' + ['ruches', 'ruchers', 'hausses', 'reines', 'journal', 'taches', 'recoltes', 'varroa'].map(k => '<button class="small" data-act="exportCsv" data-k="' + k + '">' + k + '</button>').join('') + '</div><p class="hint">Fichiers CSV (séparateur « ; », accents conservés) : s’ouvrent directement dans Excel ou LibreOffice. Sur téléphone, le menu de partage permet de les envoyer par e-mail.</p>';
   html += '<h2>Sauvegarde complète</h2><div class="actions"><button data-act="backup">Exporter (.json)</button><button data-act="importPick">Restaurer…</button></div><input type="file" id="imp" accept=".json,application/json" hidden>';
@@ -1048,7 +1050,7 @@ function importFile(f) {
     try {
       const d = JSON.parse(r.result);
       if (!d || !Array.isArray(d.hives) || !Array.isArray(d.apiaries)) throw new Error('format');
-      if (!confirm('Remplacer toutes les données actuelles par cette sauvegarde ?')) return;
+      if (!confirm(sess ? 'Remplacer toutes les données (ici ET en ligne) par cette sauvegarde ?' : 'Remplacer toutes les données actuelles par cette sauvegarde ?')) return;
       db = Object.assign(EMPTY(), d); save(); render(true); toast('Sauvegarde restaurée');
     } catch (e) { toast('Fichier de sauvegarde invalide'); }
   };
@@ -1113,7 +1115,7 @@ const ACT = {
   exportCsv(el) { const k = el.dataset.k; saveFile(k + '.csv', csvText(EXPORTS[k]()), 'text/csv'); },
   backup() { db.lastBackup = Date.now(); save(); saveFile('ojurapi-sauvegarde-' + today() + '.json', JSON.stringify(db), 'application/json'); render(true); },
   importPick() { $('#imp').click(); },
-  wipe() { if (confirm("Effacer TOUTES les données de O Jur'Api sur ce téléphone ?") && confirm('Vraiment tout effacer ? Action irréversible.')) { db = EMPTY(); save(); render(true); toast('Données effacées'); } },
+  wipe() { if (confirm(sess ? "Effacer TOUTES les données de O Jur'Api, sur ce téléphone ET en ligne (compte synchronisé) ?" : "Effacer TOUTES les données de O Jur'Api sur ce téléphone ?") && confirm('Vraiment tout effacer ? Action irréversible.')) { db = EMPTY(); save(); render(true); toast('Données effacées'); } },
   install() { if (deferredInstall) { deferredInstall.prompt(); deferredInstall = null; } },
   scanMode(el) { scan.mode = el.dataset.m; scan.target = ''; scan.pending = []; scan.batch = []; render(false); },
   homeEdit() { ui.homeEdit = true; render(false); },
@@ -1124,6 +1126,9 @@ const ACT = {
   batchDel(el) { scan.batch = scan.batch.filter(id => id !== el.dataset.id); paintScan(); },
   batchClear() { scan.batch = []; paintScan(); },
   batchOk() { if (scan.mode === 'move') moveBatchForm(); else if (scan.mode === 'treat') prodBatchForm('treat'); else prodBatchForm('feed'); },
+  syncLogin() { loginForm(); },
+  syncNow() { if (!sess) { loginForm(); return; } syncNow(true); },
+  syncLogout() { if (!confirm('Se déconnecter ? Les données restent sur ce téléphone, mais ne seront plus synchronisées.')) return; sess = null; saveSess(); paintSync(); toast('Déconnecté'); },
   hGroup(el) { ui.hg = el.dataset.g; render(true); },
   addHarvest() { harvestForm({}); },
   editHarvest(el) { const r = (db.harvests || []).find(x => x.id === el.dataset.id); if (r) harvestForm({ rec: r }); },
@@ -1150,6 +1155,147 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('change', e => { const el = e.target; if (el.tagName === 'INPUT' && el.dataset.act) ACT[el.dataset.act](el); });
 
+
+/* ================= synchronisation (Supabase) ================= */
+const SUPA = { url: 'https://sepjarreurokrungruab.supabase.co', key: 'sb_publishable_9WGnmqLpP9ZAL9RT14oMHQ_4Qy_N4tM' };
+const SKEY = 'ojurapi.sync', BKEY = 'ojurapi.syncbase';
+const COLS = ['apiaries', 'hives', 'supers', 'queens', 'logs', 'tasks', 'feeds', 'treatments', 'honeys', 'harvests', 'varroa'];
+const J = x => JSON.stringify(x === undefined ? null : x);
+function canon(x) {
+  if (Array.isArray(x)) return '[' + x.map(canon).join(',') + ']';
+  if (x && typeof x === 'object') return '{' + Object.keys(x).sort().filter(k => x[k] !== undefined).map(k => JSON.stringify(k) + ':' + canon(x[k])).join(',') + '}';
+  return JSON.stringify(x === undefined ? null : x);
+}
+function mergeRec(b, l, r) {
+  const out = {}, keys = new Set([...Object.keys(b || {}), ...Object.keys(l || {}), ...Object.keys(r || {})]);
+  keys.forEach(k => {
+    const bv = canon(b && b[k]), lv = canon(l && l[k]), rv = canon(r && r[k]);
+    const src = lv === rv ? l : lv === bv ? r : l;
+    if (src && src[k] !== undefined) out[k] = src[k];
+  });
+  return out;
+}
+function mergeCol(b, l, r) {
+  const idx = a => new Map(a.map(x => [x.id, x])), B = idx(b), L = idx(l), res = [], seen = new Set();
+  r.forEach(rx => {
+    seen.add(rx.id); const bx = B.get(rx.id), lx = L.get(rx.id);
+    if (lx) res.push(canon(lx) === canon(rx) ? lx : mergeRec(bx || {}, lx, rx));
+    else if (bx) { if (canon(bx) !== canon(rx)) res.push(rx); }
+    else res.push(rx);
+  });
+  l.forEach(lx => { if (seen.has(lx.id)) return; const bx = B.get(lx.id); if (!bx || canon(bx) !== canon(lx)) res.push(lx); });
+  return res;
+}
+function mergeDb(base, local, remote) {
+  base = base || {}; const out = {}, keys = new Set([...Object.keys(local), ...Object.keys(remote)]);
+  keys.forEach(k => {
+    if (COLS.includes(k)) out[k] = mergeCol(base[k] || [], local[k] || [], remote[k] || []);
+    else if (k === 'seq') out[k] = Math.max(local.seq || 1, remote.seq || 1);
+    else if (k === 'lastBackup') out[k] = local.lastBackup || 0;
+    else { const bv = canon(base[k]), lv = canon(local[k]), rv = canon(remote[k]); out[k] = lv === rv ? local[k] : lv === bv ? remote[k] : local[k]; }
+  });
+  return out;
+}
+function applyMerged(m) {
+  Object.keys(m).forEach(k => {
+    if (COLS.includes(k)) {
+      const cur = new Map((db[k] || []).map(x => [x.id, x]));
+      db[k] = m[k].map(x => { const o = cur.get(x.id); if (!o) return x; if (o !== x) { Object.keys(o).forEach(kk => delete o[kk]); Object.assign(o, x); } return o; });
+    } else db[k] = m[k];
+  });
+}
+const isEmptyDb = d => !['hives', 'apiaries', 'queens', 'supers', 'logs', 'tasks', 'harvests', 'varroa'].some(k => (d[k] || []).length);
+let sess = (() => { try { return JSON.parse(localStorage.getItem(SKEY) || 'null'); } catch (e) { return null; } })();
+const saveSess = () => { try { if (sess) localStorage.setItem(SKEY, JSON.stringify(sess)); else localStorage.removeItem(SKEY); } catch (e) { /* ignore */ } };
+const sync = { busy: false, dirty: false, last: 0, err: '', timer: null };
+try { sync.last = parseInt(localStorage.getItem('ojurapi.synclast'), 10) || 0; } catch (e) { /* ignore */ }
+const loadBase = () => { try { const b = JSON.parse(localStorage.getItem(BKEY) || 'null'); return b && sess && b.uid === sess.uid ? JSON.parse(b.data) : null; } catch (e) { return null; } };
+const saveBase = d => { try { localStorage.setItem(BKEY, JSON.stringify({ uid: sess.uid, data: canon(d) })); sync.last = Date.now(); localStorage.setItem('ojurapi.synclast', String(sync.last)); } catch (e) { /* ignore */ } };
+function setSess(d) { sess = { access: d.access_token, refresh: d.refresh_token, exp: Date.now() + (d.expires_in || 3600) * 1000, uid: d.user.id, email: d.user.email }; saveSess(); }
+async function ensureToken() {
+  if (!sess) throw new Error('Non connecté');
+  if (sess.exp - Date.now() > 60000) return;
+  const res = await fetch(SUPA.url + '/auth/v1/token?grant_type=refresh_token', { method: 'POST', headers: { apikey: SUPA.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: sess.refresh }) });
+  if (!res.ok) { if (res.status === 400 || res.status === 401) { sess = null; saveSess(); throw new Error('Session expirée : reconnectez-vous'); } throw new Error('Erreur ' + res.status); }
+  setSess(await res.json());
+}
+async function api(path, opt) {
+  await ensureToken();
+  const h = Object.assign({ apikey: SUPA.key, Authorization: 'Bearer ' + sess.access, 'Content-Type': 'application/json' }, (opt && opt.headers) || {});
+  return fetch(SUPA.url + path, Object.assign({}, opt, { headers: h }));
+}
+async function httpErr(r) { let t = ''; try { t = (await r.json()).message || ''; } catch (e) { /* ignore */ } return new Error(r.status === 404 || /relation|schema cache/i.test(t) ? 'Table introuvable : exécutez le script SQL de configuration (voir LISEZ-MOI)' : 'Erreur serveur ' + r.status + (t ? ' : ' + t : '')); }
+async function pull() {
+  const r = await api('/rest/v1/ojurapi_data?select=data,version,updated_at&user_id=eq.' + sess.uid);
+  if (!r.ok) throw await httpErr(r);
+  const a = await r.json(); return a[0] || null;
+}
+async function push(row, data) {
+  let r;
+  if (!row) r = await api('/rest/v1/ojurapi_data', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ user_id: sess.uid, data, version: 1 }) });
+  else r = await api('/rest/v1/ojurapi_data?user_id=eq.' + sess.uid + '&version=eq.' + row.version, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ data, version: row.version + 1, updated_at: new Date().toISOString() }) });
+  if (r.status === 409) return null;
+  if (!r.ok) throw await httpErr(r);
+  const a = await r.json(); return a.length ? true : null;
+}
+async function syncNow(manual) {
+  if (!sess) return;
+  if (sync.busy) { sync.dirty = true; return; }
+  sync.busy = true; sync.err = ''; paintSync();
+  try {
+    for (let i = 0; i < 4; i++) {
+      const row = await pull(), local = JSON.parse(JSON.stringify(db)), base = loadBase(); let merged, pushNeeded;
+      if (!row) { merged = local; pushNeeded = true; }
+      else {
+        const remote = row.data || {};
+        if (!base) {
+          if (isEmptyDb(local)) merged = remote;
+          else if (isEmptyDb(remote)) merged = local;
+          else {
+            if (!manual) throw new Error('Données déjà en ligne : touchez « Synchroniser maintenant » pour choisir');
+            try { localStorage.setItem('ojurapi.prelink', JSON.stringify(db)); } catch (e) { /* ignore */ }
+            merged = confirm('Des données existent déjà EN LIGNE et sur CE TÉLÉPHONE.\n\nOK : garder les données EN LIGNE (celles de ce téléphone sont remplacées).\nAnnuler : garder celles de CE TÉLÉPHONE (les données en ligne sont remplacées).\n\nUne copie de sécurité de ce téléphone est conservée.') ? remote : local;
+          }
+        } else merged = mergeDb(base, local, remote);
+        pushNeeded = canon(merged) !== canon(remote);
+      }
+      if (canon(merged) !== canon(local)) { applyMerged(merged); saveRaw(); if ($('#overlay').hidden) render(true); }
+      if (pushNeeded && (await push(row, merged)) === null) continue;
+      saveBase(merged); break;
+    }
+  } catch (e) { sync.err = (e && e.message) || 'Erreur'; if (/Failed to fetch|NetworkError|Load failed|fetch/i.test(sync.err)) sync.err = 'Hors ligne : synchronisation en attente'; }
+  sync.busy = false; paintSync();
+  if (sync.dirty) { sync.dirty = false; schedSync(); }
+}
+function schedSync() { if (!sess) return; paintSync(); clearTimeout(sync.timer); sync.timer = setTimeout(() => syncNow(), 2500); }
+async function login(email, pw) {
+  const r = await fetch(SUPA.url + '/auth/v1/token?grant_type=password', { method: 'POST', headers: { apikey: SUPA.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pw }) });
+  if (!r.ok) throw new Error(r.status === 400 ? 'E-mail ou mot de passe incorrect' : 'Erreur ' + r.status);
+  setSess(await r.json());
+}
+function loginForm() {
+  form({
+    title: 'Se connecter', submit: 'Se connecter',
+    fields: [{ type: 'html', html: '<div class="hint">Le même compte sur tous vos téléphones. Il se crée une seule fois sur le site Supabase (voir LISEZ-MOI).</div>' }, { name: 'email', label: 'E-mail', type: 'email', value: '' }, { name: 'password', label: 'Mot de passe', type: 'password', value: '' }],
+    onSubmit(v) {
+      if (!v.email || !v.password) { toast('E-mail et mot de passe requis'); return false; }
+      toast('Connexion…');
+      login(v.email, v.password).then(() => { closeSheet(); paintSync(); toast('Connecté'); return syncNow(true); }).catch(e => toast(/fetch|Network|Load failed/i.test(e.message) ? 'Pas de réseau' : e.message));
+      return false;
+    }
+  });
+}
+function syncCardInner() {
+  if (!sess) return '<div class="hint">Non connecté : les données restent uniquement sur ce téléphone.</div><div class="actions"><button class="primary" data-act="syncLogin">Se connecter</button></div>';
+  const st = sync.busy ? 'Synchronisation en cours…' : sync.err ? '⚠ ' + esc(sync.err) : sync.last ? '✓ Synchronisé le ' + fmtTime(sync.last) : 'Pas encore synchronisé';
+  return 'Connecté : <b>' + esc(sess.email) + '</b><div class="hint" style="margin-top:4px">' + st + '</div><div class="actions"><button class="primary small" data-act="syncNow">Synchroniser maintenant</button><button class="small" data-act="syncLogout">Se déconnecter</button></div>';
+}
+function paintSync() {
+  const c = $('#syncCard'); if (c) c.innerHTML = syncCardInner();
+  const d = $('#syncDot'); if (!d) return;
+  d.hidden = !sess; d.className = 'syncdot ' + (sync.err ? 'err' : sync.busy || sync.timer ? 'busy' : 'ok'); d.title = sync.err || (sync.busy ? 'Synchronisation…' : 'Synchronisé');
+}
+
 /* ================= routeur ================= */
 const TABS = { recoltes: 'plus', varroa: 'plus', accueil: 'accueil', ruchers: 'ruchers', rucher: 'ruchers', ruches: 'ruches', ruche: 'ruches', scan: 'scan', plus: 'plus', taches: 'plus', reines: 'plus', hausses: 'plus', etiquettes: 'plus' };
 function render(keepScroll) {
@@ -1163,6 +1309,7 @@ function render(keepScroll) {
   $('#view').innerHTML = out.html || '';
   document.querySelectorAll('#tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === TABS[route]));
   if (out.after) out.after();
+  paintSync();
   window.scrollTo(0, keepScroll === true ? y : 0);
 }
 window.addEventListener('hashchange', () => { closeSheet(); scan.manualOff = false; render(false); });
@@ -1194,7 +1341,11 @@ function endDrag() {
 }
 document.addEventListener('pointerup', endDrag);
 document.addEventListener('pointercancel', endDrag);
+window.addEventListener('online', () => syncNow());
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncNow(); });
+setInterval(() => { if (!document.hidden && sess) syncNow(); }, 60000);
+if (sess) setTimeout(() => syncNow(), 900);
 
-window.Ruchier = { homeKeys, get db() { return db; }, ACT, handleScan, scan, render, EXPORTS, csvText, parseCode };
+window.Ruchier = { mergeDb, canon, SUPA, syncNow, login, sync, get sess() { return sess; }, homeKeys, get db() { return db; }, ACT, handleScan, scan, render, EXPORTS, csvText, parseCode };
 render(false);
 })();

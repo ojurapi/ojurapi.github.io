@@ -1,5 +1,5 @@
 // Service worker : met toute l'application en cache pour un usage 100 % hors ligne.
-const CACHE = 'ojurapi-v17';
+const CACHE = 'ojurapi-v18';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'lib/qrcode.js', 'lib/jsQR.js', 'lib/leaflet/leaflet.js', 'lib/leaflet/leaflet.css',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-180.png', 'icons/icon-maskable-512.png'];
 
@@ -10,7 +10,7 @@ self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request).then(res => {
       if (res && res.ok && new URL(e.request.url).origin === location.origin) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
