@@ -36,14 +36,14 @@ const KINDS = [['ruche', 'Ruche'], ['ruchette', 'Ruchette'], ['nuc', 'Nuc']];
 const kindLabel = h => (KINDS.find(k => k[0] === h.kind) || KINDS[0])[1];
 const hn = h => kindLabel(h) + ' ' + h.code;
 const STATUS = [['active', 'Active'], ['hivernage', 'Hivernage'], ['morte', 'Morte'], ['vendue', 'Vendue']];
-const LOGTYPES = ['Visite', 'Ajout', 'Changement de reine', 'Perte', 'Nourrissement', 'Traitement', 'Varroa', 'Pose de hausse', 'Division / essaim', 'Reine', 'Récolte', 'Transhumance', 'Hivernage', 'Autre'];
+const LOGTYPES = ['Visite', 'Ajout', 'Changement de reine', 'Perte', 'Nourrissement', 'Traitement', 'Varroa', 'Pose de hausse', 'Division / essaim', 'Reine', 'Récolte', 'Transhumance', 'Autre'];
 
 const LOGICONS = { 'Sortie d’hivernage': '🌤️', 'Visite': '👀', 'Ajout': '➕', 'Changement de reine': '👑', 'Perte': '✖️', 'Nourrissement': '🥣', 'Traitement': '💊', 'Pose de hausse': '📦', 'Division / essaim': '🔀', 'Reine': '👑', 'Récolte': '🍯', 'Transhumance': '🚚', 'Hivernage': '❄️', 'Autre': '⋯' };
 const AJOUTS = [['gaufre', 'Cadre gaufré', 'Cadres gaufrés'], ['construit', 'Cadre construit', 'Cadres construits'], ['males', 'Cadre à mâles', 'Cadres à mâles'], ['partition', 'Partition', 'Partitions']];
 const pad2 = n => String(n).padStart(2, '0');
 const toLocalInput = ts => { const d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); };
 const fromLocalInput = x => { const t = x ? new Date(x).getTime() : NaN; return Number.isFinite(t) ? t : Date.now(); };
-const whenField = ts => ({ name: 'when', label: 'Date et heure', type: 'datetime-local', value: toLocalInput(ts || Date.now()) });
+const whenField = ts => ({ name: 'when', label: 'Date et heure', type: 'datetime-local', value: toLocalInput(ts || Date.now()), fold: !ts });
 function addLog(hiveId, type, note, data, ts) {
   const l = { id: uid(), ts: ts || Date.now(), hiveId, type, note: note || '' };
   if (data) l.data = data;
@@ -81,6 +81,7 @@ function fieldHtml(f) {
   if (f.type === 'html') return f.html;
   if (f.type === 'hidden') return '<input type="hidden" name="' + f.name + '" value="' + esc(f.value == null ? '' : f.value) + '">';
   const nm = 'name="' + f.name + '"';
+  if (f.fold) return '<div class="whenfold"><button type="button" class="whenbtn" data-act="whenOpen">🕒 Maintenant · <u>modifier</u></button><div hidden>' + fieldHtml(Object.assign({}, f, { fold: false })) + '</div></div>';
   if (f.type === 'select') return '<label>' + esc(f.label) + '</label><select ' + nm + '>' + f.options.map(o => '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(v) ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
   if (f.type === 'textarea') return '<label>' + esc(f.label) + '</label><textarea ' + nm + '>' + esc(v) + '</textarea>';
   if (f.type === 'checkbox') return '<label class="chk"><input type="checkbox" ' + nm + (v ? ' checked' : '') + '> ' + esc(f.label) + '</label>';
@@ -222,14 +223,18 @@ function tile(kind, key, label, color, target, badge) {
     ? '<button type="button" class="tile" style="--c:' + color + '" data-act="goScan" data-m="' + target + '">' + inner + '</button>'
     : '<a class="tile" style="--c:' + color + '" href="' + target + '">' + inner + '</a>';
 }
+const DAILY = ['open', 'visit', 'feed', 'treat', 'harvest', 'move', 'loss', 'todo'];
 function tilesHtml(flaggedCount, openTasks, editing) {
   const hidden = homeHidden();
   const keys = homeKeys().filter(k => editing || !hidden.includes(k));
-  return '<div class="tiles' + (editing ? ' editing' : '') + '">' + keys.map(k => {
+  const mk = (list) => '<div class="tiles' + (editing ? ' editing' : '') + '">' + list.map(k => {
     const t = TILE_DEFS.find(x => x.k === k), off = hidden.includes(k);
     if (editing) return '<div class="tile edit' + (off ? ' off' : '') + '" data-key="' + k + '" style="--c:' + t.color + '"><span class="grip" title="Glisser pour déplacer">⠿</span><button type="button" class="tbtn" data-act="toggleTile" data-k="' + k + '" aria-label="' + (off ? 'Afficher' : 'Masquer') + '">' + (off ? '＋' : '✕') + '</button>' + tileInner(t.icon, t.label, 0) + '</div>';
     return tile(t.kind, t.icon, t.label, t.color, t.target, t.badge === 'flag' ? flaggedCount : t.badge === 'tasks' ? openTasks : 0);
   }).join('') + '</div>';
+  if (editing) return mk(keys);
+  const daily = keys.filter(k => DAILY.includes(k)), more = keys.filter(k => !DAILY.includes(k));
+  return mk(daily) + (more.length ? '<div class="actions"><button type="button" class="morebtn" data-act="homeMore">' + (ui.homeMore ? 'Moins d’actions ▴' : 'Plus d’actions ▾') + '</button></div>' + (ui.homeMore ? mk(more) : '') : '');
 }
 
 VIEWS.accueil = () => {
@@ -242,9 +247,11 @@ VIEWS.accueil = () => {
   if (!db.apiaries.length && !db.hives.length) {
     html += '<div class="card"><b>Bienvenue 🐝</b><ol><li>Créez un <a href="#/ruchers">rucher</a></li><li>Ajoutez vos <a href="#/ruches">ruches</a> (plusieurs d’un coup possible)</li><li>Imprimez les <a href="#/etiquettes">étiquettes QR</a> et collez-les</li><li>Scannez-les au rucher pour tout enregistrer</li></ol><p class="hint">Tout reste enregistré sur ce téléphone, rien n’est envoyé sur internet.</p></div>';
   }
+  if (flagged.length || tasks.length) {
+    html += '<div class="todobar"><div class="tb-h">⚑ À faire</div>' + flagged.slice(0, 5).map(h => { const a = A(h.apiaryId); return '<a class="item" href="#/ruche/' + h.id + '"><div class="grow"><div class="t">' + esc(hn(h)) + '</div><div class="s">' + (h.todo ? '<b>' + esc(h.todo).replace(/\n/g, ' · ') + '</b>' : (a ? esc(a.name) : 'À surveiller')) + '</div></div><span class="chev">›</span></a>'; }).join('') +
+      (flagged.length > 5 ? '<div class="actions"><button class="small" data-act="seeFlagged">Voir les ' + flagged.length + ' ruches à surveiller</button></div>' : '') + tasks.map(taskItem).join('') + '</div>';
+  }
   html += tilesHtml(flagged.length, db.tasks.filter(t => !t.done).length);
-  html += '<h2>Ruches à surveiller</h2>' + (flagged.length ? flagged.map(hiveItem).join('') : '<div class="hint">Aucune ruche signalée. Activez ⚑ sur la fiche d’une ruche pour la retrouver ici.</div>');
-  html += '<h2>Tâches à venir</h2>' + (tasks.length ? tasks.map(taskItem).join('') : '<div class="hint">Rien de prévu.</div>');
   if (logs.length) html += '<h2>Dernières interventions</h2>' + logs.map(l => { const h = H(l.hiveId); return '<div class="log edl' + (isTodo(l) ? ' todo' : '') + '" data-act="editLog" data-id="' + l.id + '"><b>' + (h ? 'Ruche ' + esc(h.code) : '—') + '</b> · ' + esc(l.type) + (l.note ? ' — ' + esc(l.note) : '') + ' <small>(' + fmtTime(l.ts) + ')</small>' + logDetail(l) + '</div>'; }).join('');
   return { title: "O Jur'Api", html, actions: '<button data-act="homeEdit">✎ Personnaliser</button>' };
 };
@@ -313,8 +320,7 @@ VIEWS.ruche = id => {
   if (logs.length) html += '<p class="hint">Touchez une ligne pour modifier sa date, son heure ou sa note.</p>';
   html += '<div class="actions"><button class="small danger" data-act="delHive" data-id="' + h.id + '">Supprimer cette ruche</button></div>';
   const dt = (act, ic, col, label, cls) => '<button class="dt ' + (cls || '') + '" data-act="' + act + '" data-id="' + h.id + '" style="--c:' + col + '"><span class="ti"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[ic] + '</svg></span>' + label + '</button>';
-  const dock = '<div class="dockrow">' + dt('moveHive', 'move', '#2f5bea', 'Déplacer') + dt('hiveQr', 'scan', '#57534e', 'QR') + dt('editHive', 'settings', '#a86f00', 'Modifier') + '</div>' +
-    '<div class="dockrow">' + dt('addSuperTo', 'supers', '#0f766e', 'Hausse') + dt('addLog', 'plus', '#d99a1c', 'Intervention', 'big') + dt('toggleFlag', 'todo', '#e5702a', h.flag ? 'Retirer' : 'À surveiller', h.flag ? 'on' : '') + '</div>';
+  const dock = '<div class="dockrow">' + dt('editHive', 'settings', '#a86f00', 'Modifier') + dt('addLog', 'plus', '#d99a1c', 'Intervention', 'big') + dt('toggleFlag', 'todo', '#e5702a', h.flag ? 'Retirer' : 'À surveiller', h.flag ? 'on' : '') + '</div>';
   return { title: hn(h), back: '#/ruches', html: '<div class="hivepage">' + html + '</div>', dock };
 };
 
@@ -392,7 +398,9 @@ VIEWS.scan = () => {
   if (scan.mode === 'varroa') ctx = '<div class="actions"><a class="button small" href="#/varroa">Voir le suivi Varroa</a></div>';
   if (scan.mode === 'winter') ctx = '<label>Action</label><select id="scanAct"><option value="in"' + (scan.wact === 'in' ? ' selected' : '') + '>Hivernage</option><option value="out"' + (scan.wact === 'out' ? ' selected' : '') + '>Sortie d’hivernage</option></select><label>' + (scan.wact === 'out' ? 'Rucher d’arrivée (facultatif)' : 'Rucher d’hivernage') + '</label><select id="scanTarget">' + apiaryOptions(scan.wact === 'out' ? '— Inchangé —' : '— Choisir —').map(o => '<option value="' + esc(o[0]) + '"' + (scan.target === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select>';
   const modeName = (MODES.find(m => m[0] === scan.mode) || ['', ''])[1];
-  const tilesH = '<h2>Choisir l’action</h2><div class="tiles tiles3">' + MODES.map(m => '<button class="tile ' + (scan.mode === m[0] ? 'on' : '') + '" data-act="scanMode" data-m="' + m[0] + '" style="--c:' + MODE_ICONS[m[0]][1] + '"><span class="ti"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[MODE_ICONS[m[0]][0]] + '</svg></span>' + m[1] + '</button>').join('') + '</div>';
+  const SINGLE = ['open', 'visit', 'varroa', 'loss', 'todo'];
+  const mt = m => '<button class="tile ' + (scan.mode === m[0] ? 'on' : '') + '" data-act="scanMode" data-m="' + m[0] + '" style="--c:' + MODE_ICONS[m[0]][1] + '"><span class="ti"><svg viewBox="0 0 48 48" aria-hidden="true">' + ICONS[MODE_ICONS[m[0]][0]] + '</svg></span>' + m[1] + '</button>';
+  const tilesH = '<h2>Une seule ruche</h2><p class="hint">Après le scan, la fiche de la ruche s’ouvre avec ses grosses tuiles d’action.</p><div class="tiles tiles3">' + MODES.filter(m => SINGLE.includes(m[0])).map(mt).join('') + '</div><h2>Plusieurs ruches d’un coup</h2><div class="tiles tiles3">' + MODES.filter(m => !SINGLE.includes(m[0])).map(mt).join('') + '</div>';
   const html = '<div class="modebar"><b>' + esc(modeName) + '</b></div><p class="hint">' + MODE_HELP[scan.mode] + '</p>' + ctx +
     '<div id="scanCtx" class="hint"></div><div class="video" style="margin-top:10px"><video id="cam" playsinline muted></video><div class="aim"></div></div><div class="actions"><button class="primary" id="camBtn" data-act="camToggle">Activer la caméra</button></div>' +
     '<label>Ou saisissez le numéro (12 = ruche, S12 = hausse, Q3 = reine)</label><div class="row"><input id="manual" inputmode="text" placeholder="12" autocomplete="off"><button data-act="manualGo">OK</button></div>' + tilesH + '<h2>Historique</h2><div id="scanLog"></div>';
@@ -513,8 +521,8 @@ function handleScan(raw, force) {
     const tag = created ? ' (nouvelle ruche)' : '';
     if (m === 'open') { save(); location.hash = '#/ruche/' + h.id; if (created) toast(hn(h) + ' créée'); return; }
     if (m === 'visit') { save(); location.hash = '#/ruche/' + h.id; setTimeout(() => logForm(h), 80); return; }
-    if (m === 'todo') { save(); logTodo(h); return; }
-    if (m === 'varroa') { save(); varroaForm({ hive: h }); return; }
+    if (m === 'todo') { save(); location.hash = '#/ruche/' + h.id; setTimeout(() => logTodo(h), 80); return; }
+    if (m === 'varroa') { save(); location.hash = '#/ruche/' + h.id; setTimeout(() => varroaForm({ hive: h }), 80); return; }
     if (m === 'loss') { const wi = h.status === 'hivernage'; h.status = 'morte'; h.flag = false; h.todo = ''; addLog(h.id, wi ? 'Morte en hivernage' : 'Perte', ''); scanLog(hn(h) + (wi ? ' morte en hivernage' : ' perdue') + tag); }
     if (m === 'queen') { const q = Q(scan.target), prev = h.queenId && h.queenId !== q.id ? Q(h.queenId) : null; h.queenId = q.id; addLog(h.id, prev ? 'Changement de reine' : 'Reine', prev ? qLabel(prev) + ' → ' + qLabel(q) : 'Reine ' + qLabel(q) + ' associée'); scanLog(hn(h) + ' ← reine ' + qLabel(q) + tag); }
     if (m === 'harvest') { scan.hive = h.id; let n = 0; const lgs = [], cds = []; scan.pending.forEach(sid => { const s = S(sid), l = s && linkSuper(s, h); if (l) { n++; lgs.push(l); cds.push(s.code); } }); scan.pending = []; scanLog(hn(h) + ' sélectionnée' + (n ? ' · ' + n + ' hausse(s) liée(s)' : '') + tag); if (n && scan.weigh) { save(); harvestForm({ hive: h, supers: cds, logs: lgs }); } }
@@ -1080,6 +1088,9 @@ const ACT = {
   addHive(el) { hiveForm(el && el.dataset.ap); },
   editHive(el) { editHiveForm(H(el.dataset.id)); },
   delHive(el) { const h = H(el.dataset.id); if (!h || !confirm('Supprimer la ruche ' + h.code + ' et son journal ?')) return; removeHive(h); save(); location.hash = '#/ruches'; },
+  whenOpen(el) { el.hidden = true; const d = el.nextElementSibling; d.hidden = false; const i = d.querySelector('input'); if (i) i.focus(); },
+  homeMore() { ui.homeMore = !ui.homeMore; render(true); },
+  seeFlagged() { ui.st = 'flag'; ui.ap = ''; ui.q = ''; location.hash = '#/ruches'; },
   toggleFlag(el) { const h = H(el.dataset.id); h.flag = !h.flag; if (!h.flag) h.todo = ''; save(); render(true); },
   moveHive(el) {
     const h = H(el.dataset.id);

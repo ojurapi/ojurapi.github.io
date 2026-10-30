@@ -247,3 +247,13 @@ body.hasdock main{padding-bottom:210px}
 .dt.big .ti{width:52px;height:52px}.dt.big .ti svg{width:34px;height:34px}
 .dt.on{border-color:var(--c);background:#fdeede}
 .hivepage .card a{color:var(--honey-d);font-weight:700;font-size:17px}
+
+/* v19 : accueil simplifié, bandeau À faire, date repliée, une seule rangée d'actions sur la ruche */
+.todobar{border:2px solid #e5702a;border-radius:18px;padding:8px 10px 2px;margin:0 0 12px;background:var(--card)}
+.todobar .tb-h{font-weight:800;color:#e5702a;font-size:17px;text-align:center;margin:2px 0 8px}
+.todobar .item .s b{color:#e5702a}
+.morebtn{width:100%;min-height:52px;font-size:16px;font-weight:650;border-radius:16px;background:var(--card);border:2px solid var(--line);color:var(--ink)}
+.whenbtn{width:100%;text-align:center;background:var(--card);border:1px dashed var(--line);border-radius:12px;min-height:46px;color:var(--mute);font:inherit;margin:10px 0 4px}
+.whenfold div[hidden]{display:none}
+body.hasdock main{padding-bottom:130px}
+.dock{padding:8px 10px}
