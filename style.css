@@ -257,3 +257,5 @@ body.hasdock main{padding-bottom:210px}
 .whenfold div[hidden]{display:none}
 body.hasdock main{padding-bottom:130px}
 .dock{padding:8px 10px}
+.tiles.editing .tile.edit{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.tiles.editing .tile.edit.dragging{touch-action:none}

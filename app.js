@@ -242,7 +242,7 @@ VIEWS.accueil = () => {
   const flagged = live.filter(h => h.flag).sort((a, b) => nat(a.code, b.code));
   const tasks = db.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9999') < (b.due || '9999') ? -1 : 1).slice(0, 5);
   const logs = db.logs.slice().sort((a, b) => b.ts - a.ts).slice(0, 6);
-  if (ui.homeEdit) return { title: 'Personnaliser', html: '<p class="hint">Faites glisser la poignée ⠿ d’une tuile pour la déplacer. ✕ masque une tuile, ＋ la remet.</p>' + tilesHtml(0, 0, true) + '<div class="actions"><button class="primary" data-act="homeEditDone">✓ Terminé</button><button data-act="homeReset">Rétablir l’ordre d’origine</button></div>', actions: '<button data-act="homeEditDone">✓ Terminé</button>' };
+  if (ui.homeEdit) return { title: 'Personnaliser', html: '<p class="hint">Pour déplacer une tuile : <b>maintenez le doigt dessus</b> puis glissez-la (ou glissez la poignée ⠿). ✕ masque une tuile, ＋ la remet.</p>' + tilesHtml(0, 0, true) + '<div class="actions"><button class="primary" data-act="homeEditDone">✓ Terminé</button><button data-act="homeReset">Rétablir l’ordre d’origine</button></div>', actions: '<button data-act="homeEditDone">✓ Terminé</button>' };
   let html = '';
   if (!db.apiaries.length && !db.hives.length) {
     html += '<div class="card"><b>Bienvenue 🐝</b><ol><li>Créez un <a href="#/ruchers">rucher</a></li><li>Ajoutez vos <a href="#/ruches">ruches</a> (plusieurs d’un coup possible)</li><li>Imprimez les <a href="#/etiquettes">étiquettes QR</a> et collez-les</li><li>Scannez-les au rucher pour tout enregistrer</li></ol><p class="hint">Tout reste enregistré sur ce téléphone, rien n’est envoyé sur internet.</p></div>';
@@ -1335,13 +1335,19 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigat
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 /* glisser-déposer des tuiles (poignée ⠿, souris ou doigt) */
 let drag = null;
+let press = null;
+const startDrag = (t, el, pid) => { drag = { t, box: t.parentNode }; t.classList.add('dragging'); try { el.setPointerCapture(pid); } catch (err) { /* ignore */ } };
 document.addEventListener('pointerdown', e => {
-  const g = e.target.closest && e.target.closest('.tiles.editing .grip'); if (!g) return;
-  const t = g.closest('.tile'); drag = { t, box: t.parentNode }; t.classList.add('dragging');
-  try { g.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-  e.preventDefault();
+  const tl = e.target.closest && e.target.closest('.tiles.editing .tile.edit'); if (!tl || (e.target.closest('.tbtn'))) return;
+  if (e.target.closest('.grip')) { startDrag(tl, e.target.closest('.grip'), e.pointerId); e.preventDefault(); return; }
+  // appui long n'importe où sur la tuile
+  press = { t: tl, x: e.clientX, y: e.clientY, id: e.pointerId, timer: setTimeout(() => { if (!press) return; startDrag(press.t, press.t, press.id); try { if (navigator.vibrate) navigator.vibrate(25); } catch (err) { /* ignore */ } press = null; }, 280) };
 });
+const cancelPress = () => { if (press) { clearTimeout(press.timer); press = null; } };
+document.addEventListener('touchmove', e => { if (drag && e.cancelable) e.preventDefault(); }, { passive: false });
+document.addEventListener('contextmenu', e => { if (e.target.closest && e.target.closest('.tiles.editing')) e.preventDefault(); });
 document.addEventListener('pointermove', e => {
+  if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress();
   if (!drag) return;
   if (e.clientY > window.innerHeight - 120) window.scrollBy(0, 14); else if (e.clientY < 130) window.scrollBy(0, -14);
   const el = document.elementFromPoint ? document.elementFromPoint(e.clientX, e.clientY) : null, over = el && el.closest ? el.closest('.tile.edit') : null;
@@ -1350,6 +1356,7 @@ document.addEventListener('pointermove', e => {
   if (kids.indexOf(drag.t) < kids.indexOf(over)) over.after(drag.t); else over.before(drag.t);
 });
 function endDrag() {
+  cancelPress();
   if (!drag) return;
   drag.t.classList.remove('dragging');
   db.homeOrder = [...drag.box.querySelectorAll('.tile.edit')].map(x => x.dataset.key);
