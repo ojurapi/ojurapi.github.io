@@ -208,8 +208,9 @@ const TILE_DEFS = [
   { k: 'queens', kind: 'nav', icon: 'queen', label: 'Reines & lignées', color: '#7c3aed', target: '#/reines' }
 ];
 const DEFAULT_HIDDEN = ['queens'];
+const DAILY = ['open', 'visit', 'feed', 'treat', 'harvest', 'move', 'loss', 'todo'], MAIN_N = 8;
 function homeKeys() {
-  const all = TILE_DEFS.map(t => t.k), ord = (Array.isArray(db.homeOrder) ? db.homeOrder : []).filter((k, i, a) => all.includes(k) && a.indexOf(k) === i);
+  const all = DAILY.concat(TILE_DEFS.map(t => t.k).filter(k => !DAILY.includes(k))), ord = (Array.isArray(db.homeOrder) ? db.homeOrder : []).filter((k, i, a) => all.includes(k) && a.indexOf(k) === i);
   all.forEach(k => { if (!ord.includes(k)) ord.push(k); });
   return ord;
 }
@@ -223,17 +224,18 @@ function tile(kind, key, label, color, target, badge) {
     ? '<button type="button" class="tile" style="--c:' + color + '" data-act="goScan" data-m="' + target + '">' + inner + '</button>'
     : '<a class="tile" style="--c:' + color + '" href="' + target + '">' + inner + '</a>';
 }
-const DAILY = ['open', 'visit', 'feed', 'treat', 'harvest', 'move', 'loss', 'todo'];
+const MAINLINE = '<div class="mainline">▲ Écran d’accueil · ▼ « Plus d’actions »</div>';
 function tilesHtml(flaggedCount, openTasks, editing) {
   const hidden = homeHidden();
   const keys = homeKeys().filter(k => editing || !hidden.includes(k));
+  let seen = 0;
   const mk = (list) => '<div class="tiles' + (editing ? ' editing' : '') + '">' + list.map(k => {
     const t = TILE_DEFS.find(x => x.k === k), off = hidden.includes(k);
-    if (editing) return '<div class="tile edit' + (off ? ' off' : '') + '" data-key="' + k + '" style="--c:' + t.color + '"><span class="grip" title="Glisser pour déplacer">⠿</span><button type="button" class="tbtn" data-act="toggleTile" data-k="' + k + '" aria-label="' + (off ? 'Afficher' : 'Masquer') + '">' + (off ? '＋' : '✕') + '</button>' + tileInner(t.icon, t.label, 0) + '</div>';
+    if (editing) return '<div class="tile edit' + (off ? ' off' : '') + '" data-key="' + k + '" style="--c:' + t.color + '"><span class="grip" title="Glisser pour déplacer">⠿</span><button type="button" class="tbtn" data-act="toggleTile" data-k="' + k + '" aria-label="' + (off ? 'Afficher' : 'Masquer') + '">' + (off ? '＋' : '✕') + '</button>' + tileInner(t.icon, t.label, 0) + '</div>' + (!off && ++seen === MAIN_N ? MAINLINE : '');
     return tile(t.kind, t.icon, t.label, t.color, t.target, t.badge === 'flag' ? flaggedCount : t.badge === 'tasks' ? openTasks : 0);
   }).join('') + '</div>';
   if (editing) return mk(keys);
-  const daily = keys.filter(k => DAILY.includes(k)), more = keys.filter(k => !DAILY.includes(k));
+  const daily = keys.slice(0, MAIN_N), more = keys.slice(MAIN_N);
   return mk(daily) + (more.length ? '<div class="actions"><button type="button" class="morebtn" data-act="homeMore">' + (ui.homeMore ? 'Moins d’actions ▴' : 'Plus d’actions ▾') + '</button></div>' + (ui.homeMore ? mk(more) : '') : '');
 }
 
@@ -242,7 +244,7 @@ VIEWS.accueil = () => {
   const flagged = live.filter(h => h.flag).sort((a, b) => nat(a.code, b.code));
   const tasks = db.tasks.filter(t => !t.done).sort((a, b) => (a.due || '9999') < (b.due || '9999') ? -1 : 1).slice(0, 5);
   const logs = db.logs.slice().sort((a, b) => b.ts - a.ts).slice(0, 6);
-  if (ui.homeEdit) return { title: 'Personnaliser', html: '<p class="hint">Pour déplacer une tuile : <b>maintenez le doigt dessus</b> puis glissez-la (ou glissez la poignée ⠿). ✕ masque une tuile, ＋ la remet.</p>' + tilesHtml(0, 0, true) + '<div class="actions"><button class="primary" data-act="homeEditDone">✓ Terminé</button><button data-act="homeReset">Rétablir l’ordre d’origine</button></div>', actions: '<button data-act="homeEditDone">✓ Terminé</button>' };
+  if (ui.homeEdit) return { title: 'Personnaliser', html: '<p class="hint">Pour déplacer une tuile : <b>maintenez le doigt dessus</b> puis glissez-la (ou glissez la poignée ⠿). La ligne orange sépare l’écran d’accueil (au-dessus, 8 tuiles) de « Plus d’actions » (en dessous). ✕ masque une tuile, ＋ la remet.</p>' + tilesHtml(0, 0, true) + '<div class="actions"><button class="primary" data-act="homeEditDone">✓ Terminé</button><button data-act="homeReset">Rétablir l’ordre d’origine</button></div>', actions: '<button data-act="homeEditDone">✓ Terminé</button>' };
   let html = '';
   if (!db.apiaries.length && !db.hives.length) {
     html += '<div class="card"><b>Bienvenue 🐝</b><ol><li>Créez un <a href="#/ruchers">rucher</a></li><li>Ajoutez vos <a href="#/ruches">ruches</a> (plusieurs d’un coup possible)</li><li>Imprimez les <a href="#/etiquettes">étiquettes QR</a> et collez-les</li><li>Scannez-les au rucher pour tout enregistrer</li></ol><p class="hint">Tout reste enregistré sur ce téléphone, rien n’est envoyé sur internet.</p></div>';
@@ -1335,6 +1337,11 @@ if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigat
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 /* glisser-déposer des tuiles (poignée ⠿, souris ou doigt) */
 let drag = null;
+function placeLine(box) {
+  const d = box.querySelector('.mainline'); if (!d) return; let n = 0, last = null;
+  for (const t of box.querySelectorAll('.tile.edit')) { if (!t.classList.contains('off') && ++n === MAIN_N) { last = t; break; } }
+  if (last) last.after(d); else box.appendChild(d);
+}
 let press = null;
 const startDrag = (t, el, pid) => { drag = { t, box: t.parentNode }; t.classList.add('dragging'); try { el.setPointerCapture(pid); } catch (err) { /* ignore */ } };
 document.addEventListener('pointerdown', e => {
@@ -1354,6 +1361,7 @@ document.addEventListener('pointermove', e => {
   if (!over || over === drag.t || over.parentNode !== drag.box) return;
   const kids = [...drag.box.children];
   if (kids.indexOf(drag.t) < kids.indexOf(over)) over.after(drag.t); else over.before(drag.t);
+  placeLine(drag.box);
 });
 function endDrag() {
   cancelPress();

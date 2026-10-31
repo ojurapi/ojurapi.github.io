@@ -259,3 +259,4 @@ body.hasdock main{padding-bottom:130px}
 .dock{padding:8px 10px}
 .tiles.editing .tile.edit{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .tiles.editing .tile.edit.dragging{touch-action:none}
+.mainline{grid-column:1/-1;text-align:center;font-size:13px;font-weight:700;color:#e5702a;border-top:3px solid #e5702a;padding-top:6px;margin:4px 0 2px}
