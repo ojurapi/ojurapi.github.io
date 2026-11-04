@@ -808,7 +808,7 @@ function editHiveForm(h) {
     }
   });
 }
-function applyQueenChoice(h, el, v) {
+function checkQueen(h, el) {
   const code = el.qnew_code.value.trim();
   let q = null;
   if (code) { if (queenByCode(code)) { toast('La reine « ' + code + ' » existe déjà : choisissez-la dans la liste'); return false; } }
@@ -819,18 +819,20 @@ function applyQueenChoice(h, el, v) {
     const other = db.hives.find(x => x.queenId === q.id && x.id !== h.id);
     if (other) { toast('La reine ' + q.code + ' est déjà dans la ruche ' + other.code); return false; }
   }
-  const created = !q;
-  if (created) { q = { id: uid(), code, year: parseInt(el.qnew_year.value, 10) || '', lineage: el.qnew_lineage.value.trim(), motherId: el.qnew_mother.value, note: '' }; db.queens.push(q); }
+  return { code, q };
+}
+function doQueen(h, el, info, type, userNote, ts) {
+  let q = info.q; const created = !q;
+  if (created) { q = { id: uid(), code: info.code, year: parseInt(el.qnew_year.value, 10) || '', lineage: el.qnew_lineage.value.trim(), motherId: el.qnew_mother.value, note: '' }; db.queens.push(q); }
   const prev = Q(h.queenId);
   h.queenId = q.id;
-  addLog(h.id, v.type, (prev ? qLabel(prev) + ' → ' : 'Reine ') + qLabel(q) + (created ? ' (nouvelle reine)' : '') + (v.note ? '\n' + v.note : ''), null, fromLocalInput(v.when));
-  h.flag = v.flag; save(); render(true); toast(created ? 'Reine créée et placée dans la ruche' : 'Reine placée dans la ruche');
-  return true;
+  addLog(h.id, type, (prev ? qLabel(prev) + ' → ' : 'Reine ') + qLabel(q) + (created ? ' (nouvelle reine)' : '') + (userNote ? '\n' + userNote : ''), null, ts);
+  return created;
 }
 const nl2 = (a, b) => (a ? a + '\n' : '') + b;
 function logForm(h) {
   const tri = (name, label) => '<div class="trirow"><span>' + label + '</span><div class="tri" data-tri="' + name + '"><button type="button" data-v="ok">✓ OK</button><button type="button" data-v="ko">✕ KO</button></div><input type="hidden" name="' + name + '" value=""></div>';
-  const typeTiles = '<label>Type d’intervention</label><div class="typegrid">' + LOGTYPES.map((t, i) => '<button type="button" class="' + (i === 0 ? 'on' : '') + '" data-type="' + t + '">' + logIcon(t) + '' + t + '</button>').join('') + '</div>';
+  const typeTiles = '<label>Type d’intervention <small class="hint">(touchez-en plusieurs si besoin)</small></label><div class="typegrid">' + LOGTYPES.map((t, i) => '<button type="button" class="' + (i === 0 ? 'on' : '') + '" data-type="' + t + '">' + logIcon(t) + '' + t + '</button>').join('') + '</div>';
   const optsHtml = arr => arr.map(o => '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>').join('');
   const curQ = Q(h.queenId);
   const qbox = '<div id="lg-reine" class="lgbox" hidden>' +
@@ -849,57 +851,89 @@ function logForm(h) {
     '<div id="lg-winter" class="lgbox" hidden><label>Action</label><select name="wi_act"><option value="in">Hivernage</option><option value="out">Sortie d’hivernage</option></select><label>Rucher (obligatoire pour l’hivernage, facultatif pour la sortie)</label><select name="wi_ap">' + optsHtml(apiaryOptions('— Choisir —')) + '</select></div>' +
     '<div id="lg-loss" class="lgbox hint" hidden>La ruche sera marquée morte (« morte en hivernage » si elle hivernait).</div>' +
     '<div id="lg-super" class="lgbox" hidden><label>Numéros de hausses (facultatif, ex. 12, 13)</label><input name="sup_codes" autocomplete="off"></div>';
-  const html = qbox + extra + '<div id="lg-visite" class="lgbox">' + (h.status === 'morte' ? '<div class="hint" style="margin:6px 0">Cette ruche est marquée morte : enregistrer une visite la réactivera.</div>' : '') + tri('reine', 'Reine') + tri('pontes', 'Pontes') + '</div>' +
-    '<div id="lg-ajout" class="lgbox" hidden>' + AJOUTS.map(a => '<div class="step"><span>' + a[1] + '</span><button type="button" data-step="-1" data-for="' + a[0] + '">−</button><input name="aj_' + a[0] + '" type="number" min="0" max="99" value="0" inputmode="numeric"><button type="button" data-step="1" data-for="' + a[0] + '">+</button></div>').join('') + '</div>';
+  const html = '<div id="lg-visite" class="lgbox">' + (h.status === 'morte' ? '<div class="hint" style="margin:6px 0">Cette ruche est marquée morte : enregistrer une visite la réactivera.</div>' : '') + tri('reine', 'Reine') + tri('pontes', 'Pontes') + '</div>' +
+    '<div id="lg-ajout" class="lgbox" hidden>' + AJOUTS.map(a => '<div class="step"><span>' + a[1] + '</span><button type="button" data-step="-1" data-for="' + a[0] + '">−</button><input name="aj_' + a[0] + '" type="number" min="0" max="99" value="0" inputmode="numeric"><button type="button" data-step="1" data-for="' + a[0] + '">+</button></div>').join('') + '</div>' + qbox + extra;
   form({
     title: 'Intervention · ruche ' + h.code,
-    fields: [{ name: 'type', type: 'hidden', value: 'Visite' }, { type: 'html', html: typeTiles }, { type: 'html', html }, whenField(), { name: 'note', label: 'Notes (couvain, réserves, comportement…)', type: 'textarea' }, { name: 'flag', label: '⚑ Marquer à surveiller', type: 'checkbox', value: h.flag }],
+    fields: [{ name: 'type', type: 'hidden', value: 'Visite' }, { name: 'types', type: 'hidden', value: 'Visite' }, { type: 'html', html: typeTiles }, { type: 'html', html }, whenField(), { name: 'note', label: 'Notes (couvain, réserves, comportement…)', type: 'textarea' }, { name: 'flag', label: '⚑ Marquer à surveiller', type: 'checkbox', value: h.flag }],
     onSubmit(v) {
-      const el = $('#f').elements, data = {};
-      if (v.type === 'Changement de reine' || v.type === 'Reine') return applyQueenChoice(h, el, v);
-      if (v.type === 'Visite') { if (el.reine.value) data.reine = el.reine.value; if (el.pontes.value) data.pontes = el.pontes.value; }
-      if (v.type === 'Ajout') {
-        const aj = {}; AJOUTS.forEach(a => { const n = parseInt(el['aj_' + a[0]].value, 10) || 0; if (n > 0) aj[a[0]] = Math.min(n, 99); });
-        if (!Object.keys(aj).length && !v.note) { toast('Indiquez au moins un élément ajouté'); return false; }
-        if (Object.keys(aj).length) data.ajout = aj;
+      const el = $('#f').elements, ts = fromLocalInput(v.when);
+      const prim = (el.types.value || '').split('|').filter(Boolean);
+      let types = prim.length && v.type === prim[0] ? prim : [v.type];
+      types = LOGTYPES.filter(t => types.includes(t)).concat(types.filter(t => !LOGTYPES.includes(t)));
+      if (!types.length || !types[0]) { toast('Choisissez au moins un type d’intervention'); return false; }
+      // 1) tout vérifier avant de rien enregistrer
+      const entries = [];
+      for (let i = 0; i < types.length; i++) {
+        const t = types[i], un = i === 0 ? v.note : '', nlx = txt => txt + (un ? '\n' + un : '');
+        const e = { type: t, note: un, data: {}, run: null };
+        if (t === 'Changement de reine' || t === 'Reine') { const info = checkQueen(h, el); if (!info) return false; e.queen = info; }
+        if (t === 'Visite') {
+          if (el.reine.value) e.data.reine = el.reine.value; if (el.pontes.value) e.data.pontes = el.pontes.value;
+          if (h.status === 'morte') { e.note = nl2(un, 'Ruche réactivée (était morte)'); e.react = true; e.run = () => { h.status = 'active'; }; }
+        }
+        if (t === 'Ajout') {
+          const aj = {}; AJOUTS.forEach(a => { const n = parseInt(el['aj_' + a[0]].value, 10) || 0; if (n > 0) aj[a[0]] = Math.min(n, 99); });
+          if (!Object.keys(aj).length && !v.note) { toast('Indiquez au moins un élément ajouté'); return false; }
+          if (Object.keys(aj).length) e.data.ajout = aj;
+        }
+        if (t === 'Nourrissement' || t === 'Traitement') {
+          const k = t === 'Traitement' ? 'treat' : 'feed', c = PRODS[k], names = prodNames(k, el, true);
+          if (!names.length) { toast('Choisissez ou créez un ' + c.noun); return false; }
+          e.data[c.key] = names; const q = el.pqty.value.trim(); if (q) e.data.qty = q;
+          e.note = nlx(names.join(' + ') + (q ? ' — ' + q : ''));
+        }
+        if (t === 'Transhumance') {
+          const a = A(el.mv_ap.value); if (!a) { toast('Choisissez le rucher de destination'); return false; }
+          e.note = nlx('Déplacée vers ' + a.name); e.run = () => { h.apiaryId = a.id; if (h.status === 'hivernage') h.status = 'active'; };
+        }
+        if (t === 'Hivernage') {
+          const out = el.wi_act.value === 'out', a = A(el.wi_ap.value);
+          if (!out && !a) { toast('Choisissez le rucher d’hivernage'); return false; }
+          e.type = out ? 'Sortie d’hivernage' : 'Hivernage'; e.note = nlx(e.type + (a ? (out ? ' vers ' : ' à ') + a.name : ''));
+          e.run = () => { if (a) h.apiaryId = a.id; h.status = out ? 'active' : 'hivernage'; };
+        }
+        if (t === 'Perte') { const wi = h.status === 'hivernage'; if (wi) e.type = 'Morte en hivernage'; e.lost = true; e.run = () => { h.status = 'morte'; h.todo = ''; }; }
+        if (t === 'Pose de hausse' || t === 'Récolte') {
+          const codes = el.sup_codes.value.split(/[\s,;]+/).filter(Boolean);
+          if (codes.length) { e.data.supers = codes; e.note = nlx('Hausse' + (codes.length > 1 ? 's' : '') + ' ' + codes.join(', ')); e.run = () => { codes.forEach(cd => { const sp = superByCode(cd) || newSuper(cd); sp.hiveId = h.id; sp.since = today(); }); }; }
+        }
+        entries.push(e);
       }
-      const ts = fromLocalInput(v.when); let type = v.type, note = v.note;
-      const nl = (txt) => txt + (v.note ? '\n' + v.note : '');
-      if (type === 'Nourrissement' || type === 'Traitement') {
-        const k = type === 'Traitement' ? 'treat' : 'feed', c = PRODS[k], names = prodNames(k, el, true);
-        if (!names.length) { toast('Choisissez ou créez un ' + c.noun); return false; }
-        data[c.key] = names; const q = el.pqty.value.trim(); if (q) data.qty = q;
-        note = nl(names.join(' + ') + (q ? ' — ' + q : ''));
-      }
-      if (type === 'Transhumance') {
-        const a = A(el.mv_ap.value); if (!a) { toast('Choisissez le rucher de destination'); return false; }
-        h.apiaryId = a.id; if (h.status === 'hivernage') h.status = 'active'; note = nl('Déplacée vers ' + a.name);
-      }
-      if (type === 'Hivernage') {
-        const out = el.wi_act.value === 'out', a = A(el.wi_ap.value);
-        if (!out && !a) { toast('Choisissez le rucher d’hivernage'); return false; }
-        if (a) h.apiaryId = a.id; h.status = out ? 'active' : 'hivernage'; type = out ? 'Sortie d’hivernage' : 'Hivernage';
-        note = nl(type + (a ? (out ? ' vers ' : ' à ') + a.name : ''));
-      }
-      if (type === 'Perte') { const wi = h.status === 'hivernage'; h.status = 'morte'; h.todo = ''; v.flag = false; if (wi) type = 'Morte en hivernage'; }
-      if (type === 'Pose de hausse' || type === 'Récolte') {
-        const codes = el.sup_codes.value.split(/[\s,;]+/).filter(Boolean);
-        if (codes.length) { codes.forEach(cd => { const sp = superByCode(cd) || newSuper(cd); sp.hiveId = h.id; sp.since = today(); }); data.supers = codes; note = nl('Hausse' + (codes.length > 1 ? 's' : '') + ' ' + codes.join(', ')); }
-      }
-      let react = false;
-      if (type === 'Visite' && h.status === 'morte') { h.status = 'active'; react = true; note = nl2(note, 'Ruche réactivée (était morte)'); }
-      addLog(h.id, type, note, Object.keys(data).length ? data : null, ts); h.flag = v.flag; save(); render(true); toast(react ? 'Intervention enregistrée · ruche réactivée' : 'Intervention enregistrée');
+      // 2) puis tout enregistrer d'un coup
+      let react = false, lost = false, createdQ = false, placedQ = false;
+      entries.forEach(e => {
+        if (e.run) e.run();
+        if (e.queen) { createdQ = doQueen(h, el, e.queen, e.type, e.note, ts); placedQ = true; return; }
+        addLog(h.id, e.type, e.note, Object.keys(e.data).length ? e.data : null, ts);
+        if (e.react) react = true; if (e.lost) lost = true;
+      });
+      h.flag = lost ? false : v.flag; save(); render(true);
+      toast(entries.length > 1 ? entries.length + ' interventions enregistrées' : placedQ ? (createdQ ? 'Reine créée et placée dans la ruche' : 'Reine placée dans la ruche') : react ? 'Intervention enregistrée · ruche réactivée' : 'Intervention enregistrée');
     }
   });
   const f = $('#f');
   const PANELS = { 'Visite': ['lg-visite'], 'Ajout': ['lg-ajout'], 'Changement de reine': ['lg-reine'], 'Reine': ['lg-reine'], 'Nourrissement': ['lg-feed', 'lg-pqty'], 'Traitement': ['lg-treat', 'lg-pqty'], 'Transhumance': ['lg-move'], 'Hivernage': ['lg-winter'], 'Perte': ['lg-loss'], 'Pose de hausse': ['lg-super'], 'Récolte': ['lg-super'] };
-  const sync = () => { const t = f.elements.type.value, on = PANELS[t] || []; ['lg-visite', 'lg-ajout', 'lg-reine', 'lg-feed', 'lg-treat', 'lg-pqty', 'lg-move', 'lg-winter', 'lg-loss', 'lg-super'].forEach(id => { $('#' + id).hidden = !on.includes(id); }); };
+  const sel = new Set(['Visite']);
+  const sync = () => { const on = [].concat(...[...sel].map(t => PANELS[t] || [])); ['lg-visite', 'lg-ajout', 'lg-reine', 'lg-feed', 'lg-treat', 'lg-pqty', 'lg-move', 'lg-winter', 'lg-loss', 'lg-super'].forEach(id => { $('#' + id).hidden = !on.includes(id); }); };
   sync();
   f.addEventListener('click', e => {
     const tt = e.target.closest('[data-type]');
     if (tt && tt.dataset.type === 'Varroa') { closeSheet(); varroaForm({ hive: h }); return; }
     if (tt && tt.dataset.type === 'Récolte') { closeSheet(); harvestForm({ hive: h }); return; }
-    if (tt) { f.elements.type.value = tt.dataset.type; f.querySelectorAll('[data-type]').forEach(b => b.classList.toggle('on', b === tt)); sync(); return; }
+    if (tt) {
+      const t = tt.dataset.type;
+      if (sel.has(t)) sel.delete(t);
+      else {
+        if (t === 'Perte') sel.clear(); else sel.delete('Perte');
+        if (t === 'Reine') sel.delete('Changement de reine'); if (t === 'Changement de reine') sel.delete('Reine');
+        sel.add(t);
+      }
+      const arr = LOGTYPES.filter(x => sel.has(x));
+      f.elements.types.value = arr.join('|'); f.elements.type.value = arr[0] || '';
+      f.querySelectorAll('[data-type]').forEach(b => b.classList.toggle('on', sel.has(b.dataset.type)));
+      sync(); return;
+    }
     const tb = e.target.closest('.tri button');
     if (tb) {
       const g = tb.closest('.tri'), inp = f.elements[g.dataset.tri];
