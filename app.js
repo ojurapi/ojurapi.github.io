@@ -494,7 +494,28 @@ function prodDel(k, el) {
   if (!f || !confirm('Supprimer « ' + f.name + ' » de la liste ? (le journal est conservé)')) return;
   db[c.list] = db[c.list].filter(x => x.id !== f.id); st.checked = st.checked.filter(i => i !== f.id); save(); prodBatchForm(k, st);
 }
-function scanLog(msg, warn) { scan.log.unshift({ msg, warn: !!warn }); scan.log = scan.log.slice(0, 25); paintScan(); toast(msg); }
+/* sons du scan : généré par l'app (aucun fichier), bip net = reconnu, son grave double = erreur */
+const Snd = { ctx: null, log: [], okT: 0 };
+function sndUnlock() {
+  try { const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return; if (!Snd.ctx) Snd.ctx = new AC(); if (Snd.ctx.state === 'suspended') Snd.ctx.resume(); } catch (e) { /* ignore */ }
+}
+['pointerdown', 'touchstart', 'click'].forEach(ev => document.addEventListener(ev, sndUnlock, { passive: true }));
+function sndTone(freq, start, dur, type, vol) {
+  const c = Snd.ctx; if (!c) return;
+  const o = c.createOscillator(), g = c.createGain(), t0 = c.currentTime + start;
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.008); g.gain.setValueAtTime(vol, t0 + dur - 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(c.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function scanSound(kind) {
+  Snd.log.push(kind); if (Snd.log.length > 50) Snd.log.shift();
+  try {
+    sndUnlock();
+    if (kind === 'ok') { sndTone(2200, 0, 0.09, 'square', 0.12); if (navigator.vibrate) navigator.vibrate(50); }
+    else { sndTone(240, 0, 0.14, 'square', 0.12); sndTone(180, 0.18, 0.2, 'square', 0.12); if (navigator.vibrate) navigator.vibrate([70, 50, 70]); }
+  } catch (e) { /* ignore */ }
+}
+function scanLog(msg, warn) { if (warn) { clearTimeout(Snd.okT); scanSound('err'); } scan.log.unshift({ msg, warn: !!warn }); scan.log = scan.log.slice(0, 25); paintScan(); toast(msg); }
 function parseCode(raw) {
   const t = String(raw).trim();
   let m = /^RCH:([HSQ]):(.+)$/i.exec(t); if (m) return { t: m[1].toUpperCase(), code: m[2].trim() };
@@ -508,11 +529,11 @@ function linkSuper(s, h) {
 }
 function handleScan(raw, force) {
   const p = parseCode(raw);
-  if (!p) { scanLog('Code non reconnu : ' + raw, true); return; }
+  if (!p) { const n0 = Date.now(); if (!force && scan.last === 'x:' + raw && n0 - scan.lastT < 3000) { scan.lastT = n0; return; } scan.last = 'x:' + raw; scan.lastT = n0; scanLog('Code non reconnu : ' + raw, true); return; }
   const key = p.t + ':' + p.code, now = Date.now();
   if (!force && key === scan.last && now - scan.lastT < 3000) { scan.lastT = now; return; }
   scan.last = key; scan.lastT = now;
-  try { if (navigator.vibrate) navigator.vibrate(50); } catch (e) { /* ignore */ }
+  clearTimeout(Snd.okT); Snd.okT = setTimeout(() => scanSound('ok'), 0);
   const m = scan.mode;
   if (p.t === 'H') {
     const needA = m === 'winter' && scan.wact === 'in';
@@ -601,39 +622,78 @@ function harvestForm(o) {
   fields.push(whenField(rec ? rec.ts : 0),
     { name: 'honey', label: 'Type de miel', type: 'select', options: hopts, value: honey0 },
     { name: 'newhoney', label: 'Ou créer un nouveau type de miel', value: '', placeholder: 'ex. Colza, Montagne…' },
+    { name: 'supers', label: 'Numéros de hausses (facultatif — avec 2 hausses ou plus, une pesée par hausse)', value: rec ? (rec.supers || []).join(', ') : (o.supers || []).join(', ') },
     { name: 'gross', label: 'Poids brut (kg) — hausse pleine', value: rec && rec.gross ? String(rec.gross).replace('.', ',') : '', inputmode: 'decimal' },
     { name: 'tare', label: 'Tare (kg) — hausse vide', value: rec ? (rec.tare ? String(rec.tare).replace('.', ',') : '') : (db.lastTare ? String(db.lastTare).replace('.', ',') : ''), inputmode: 'decimal' },
     { name: 'net', label: 'Poids net de miel (kg) — calculé si brut et tare sont remplis', value: rec ? String(rec.weight).replace('.', ',') : '', inputmode: 'decimal' },
-    { name: 'supers', label: 'Numéros de hausses (facultatif, ex. 12, 13)', value: rec ? (rec.supers || []).join(', ') : (o.supers || []).join(', ') },
+    { type: 'html', html: '<div id="hrows" hidden></div><div class="actions"><button type="button" class="small" id="hmode" hidden></button></div>' },
     { name: 'note', label: 'Note', type: 'textarea', value: rec ? rec.note : '' });
   form({
     title: (rec ? 'Récolte' : 'Nouvelle récolte') + (h ? ' · ' + hn(h) : ''), fields,
     extra: rec ? '<div class="actions"><button type="button" class="small danger" data-act="delHarvest" data-id="' + rec.id + '">Supprimer cette récolte</button></div>' : '',
     onSubmit(v) {
       const hv = h || H(v.hiveId); if (!hv) { toast('Choisissez la ruche'); return false; }
-      const g = num(v.gross), t = num(v.tare) || 0; let net = num(v.net);
-      if (!(net > 0) && g > 0) net = g - t;
+      const many = !$('#hrows').hidden;
+      let g = num(v.gross), t = num(v.tare) || 0, net = num(v.net), items = null;
+      if (many) {
+        items = [];
+        for (const r of $('#hrows').querySelectorAll('.hr')) {
+          const rg = num(r.querySelector('.hg').value), rt = num(r.querySelector('.ht').value) || 0;
+          if (!(rg > 0)) { toast('Indiquez le poids brut de la hausse ' + r.dataset.code); return false; }
+          if (!(rg - rt > 0)) { toast('La tare dépasse le poids brut (hausse ' + r.dataset.code + ')'); return false; }
+          items.push({ code: r.dataset.code, gross: r2(rg), tare: r2(rt), net: r2(rg - rt) });
+        }
+        g = items.reduce((x, i) => x + i.gross, 0); t = items.reduce((x, i) => x + i.tare, 0); net = items.reduce((x, i) => x + i.net, 0);
+      } else if (!(net > 0) && g > 0) net = g - t;
       if (!(net > 0)) { toast('Indiquez le poids de miel'); return false; }
       let honey = v.newhoney || v.honey;
       if (v.newhoney && !db.honeys.some(m => m.name.toLowerCase() === v.newhoney.toLowerCase())) db.honeys.push({ id: uid(), name: v.newhoney });
       const codes = v.supers.split(/[\s,;]+/).filter(Boolean);
-      codes.forEach(cd => { const sp = superByCode(cd) || newSuper(cd); if (sp.hiveId !== hv.id) { sp.hiveId = hv.id; sp.since = today(); } });
+      codes.forEach(cd => { const sp = superByCode(cd) || newSuper(cd); if (sp.hiveId !== hv.id) { sp.hiveId = hv.id; sp.since = today(); }
+        const it = items && items.find(i => i.code === cd); if (it && it.tare > 0) sp.tare = it.tare; else if (!items && codes.length === 1 && t > 0) sp.tare = r2(t); });
       const ts = fromLocalInput(v.when), a = A(hv.apiaryId), q = Q(hv.queenId);
       const r = rec || { id: uid(), hiveId: hv.id, hiveCode: hv.code, apiaryId: hv.apiaryId, apiary: a ? a.name : '', queenId: hv.queenId, queen: q ? qLabel(q) : '' };
-      Object.assign(r, { ts, supers: codes, gross: g > 0 ? r2(g) : 0, tare: t > 0 ? r2(t) : 0, weight: r2(net), honey, note: v.note });
-      const text = (codes.length ? 'Hausse' + (codes.length > 1 ? 's' : '') + ' ' + codes.join(', ') + ' · ' : '') + KG(net) + (honey ? ' · ' + honey : '') + (v.note ? '\n' + v.note : '');
+      Object.assign(r, { ts, supers: codes, gross: g > 0 ? r2(g) : 0, tare: t > 0 ? r2(t) : 0, weight: r2(net), honey, note: v.note, items: items || undefined });
+      const text = (codes.length ? 'Hausse' + (codes.length > 1 ? 's' : '') + ' ' + codes.join(', ') + ' · ' : '') + KG(net) + (items ? ' (' + items.map(i => i.code + ' : ' + KG(i.net)).join(' · ') + ')' : '') + (honey ? ' · ' + honey : '') + (v.note ? '\n' + v.note : '');
       const data = { weight: r.weight, honey, supers: codes };
       let lg = rec ? db.logs.find(l => l.id === rec.logId) : (o.logs && o.logs[0]);
       if (!rec && o.logs) o.logs.slice(1).forEach(x => { db.logs = db.logs.filter(l => l.id !== x.id); });
       if (lg) { lg.ts = ts; lg.note = text; lg.data = data; } else lg = addLog(hv.id, 'Récolte', text, data, ts);
       r.logId = lg.id;
       if (!rec) { db.harvests = db.harvests || []; db.harvests.push(r); }
-      if (t > 0) db.lastTare = r2(t); if (honey) db.lastHoney = honey;
+      const lt = items ? items[items.length - 1].tare : t; if (lt > 0) db.lastTare = r2(lt); if (honey) db.lastHoney = honey;
       save(); render(true); toast('Récolte enregistrée : ' + KG(net));
     }
   });
   const f = $('#f').elements, upd = () => { const g = num(f.gross.value), t = num(f.tare.value) || 0; if (g > 0) f.net.value = String(r2(Math.max(0, g - t))).replace('.', ','); };
   f.gross.oninput = upd; f.tare.oninput = upd;
+  const box = $('#hrows'), legacy = !!rec && !rec.items, prev = new Map();
+  if (rec && rec.items) rec.items.forEach(i => prev.set(String(i.code), { g: i.gross, t: i.tare }));
+  const fmt = n => (n === '' || n == null || n === 0) ? '' : String(n).replace('.', ',');
+  const showF = (n, on) => { const e = f[n]; e.hidden = !on; const lb = e.previousElementSibling; if (lb && lb.tagName === 'LABEL') lb.hidden = !on; };
+  const calc = () => {
+    let tot = 0;
+    box.querySelectorAll('.hr').forEach(r => { const g = num(r.querySelector('.hg').value), t = num(r.querySelector('.ht').value) || 0, n = g > 0 ? Math.max(0, r2(g - t)) : 0; tot += n; r.querySelector('.hnet').textContent = g > 0 ? KG(n) : '—'; });
+    const T = box.querySelector('.htot'); if (T) T.innerHTML = 'Total net : <b>' + KG(r2(tot)) + '</b>';
+  };
+  const rows = () => {
+    const codes = f.supers.value.split(/[\s,;]+/).filter(Boolean), canMany = !legacy && codes.length >= 2, many = canMany && !box.dataset.one;
+    const hm = $('#hmode'); hm.hidden = !canMany; hm.textContent = many ? 'Saisir un seul poids total' : '⚖ Peser chaque hausse séparément';
+    ['gross', 'tare', 'net'].forEach(n => showF(n, !many)); box.hidden = !many;
+    if (!many) { if (codes.length === 1 && !rec) { const sp = superByCode(codes[0]); if (sp && sp.tare) { f.tare.value = fmt(sp.tare); upd(); } } return; }
+    box.querySelectorAll('.hr').forEach(r => prev.set(r.dataset.code, { g: r.querySelector('.hg').value, t: r.querySelector('.ht').value }));
+    const common = box.querySelector('.hall') ? box.querySelector('.hall').value : '';
+    box.innerHTML = '<label>Tare commune à toutes les hausses (kg) — facultatif</label><input class="hall" inputmode="decimal" placeholder="ex. 2,1" value="' + esc(common) + '"><div class="hint">Chaque hausse garde sa propre tare : modifiez-la ligne par ligne si elles n’ont pas le même poids.</div>' +
+      codes.map(c => { const p = prev.get(c) || {}, sp = superByCode(c), t = p.t != null && p.t !== '' ? p.t : fmt(sp && sp.tare ? sp.tare : db.lastTare); return '<div class="hr" data-code="' + esc(c) + '"><b>Hausse ' + esc(c) + '</b><div class="hrr"><div><label>Brut (kg)</label><input class="hg" inputmode="decimal" value="' + esc(fmt(p.g)) + '"></div><div><label>Tare (kg)</label><input class="ht" inputmode="decimal" value="' + esc(fmt(t)) + '"></div></div><div class="hint">Net : <b class="hnet">—</b></div></div>'; }).join('') + '<div class="htot"></div>';
+    calc();
+  };
+  box.addEventListener('input', e => {
+    if (e.target.classList.contains('hall')) box.querySelectorAll('.ht').forEach(i => { i.value = e.target.value; });
+    calc();
+  });
+  f.supers.addEventListener('input', rows);
+  $('#hmode').addEventListener('click', () => { if (box.dataset.one) delete box.dataset.one; else box.dataset.one = '1'; rows(); });
+  rows();
 }
 VIEWS.recoltes = () => {
   const all = (db.harvests || []).slice().sort((a, b) => b.ts - a.ts);
@@ -996,12 +1056,12 @@ function taskForm(t, apiaryId) {
 function superForm(s) {
   form({
     title: 'Hausse ' + s.code,
-    fields: [{ name: 'code', label: 'Numéro', value: s.code }, { name: 'hiveId', label: 'Sur la ruche', type: 'select', options: hiveOptions('— Libre —'), value: s.hiveId }],
+    fields: [{ name: 'code', label: 'Numéro', value: s.code }, { name: 'hiveId', label: 'Sur la ruche', type: 'select', options: hiveOptions('— Libre —'), value: s.hiveId }, { name: 'tare', label: 'Tare — poids de la hausse vide (kg)', value: s.tare ? String(s.tare).replace('.', ',') : '', inputmode: 'decimal' }],
     extra: '<div class="actions"><button type="button" class="small danger" data-act="delSuper" data-id="' + s.id + '">Supprimer</button></div>',
     onSubmit(v) {
       if (!v.code) { toast('Numéro requis'); return false; }
       const o = superByCode(v.code); if (o && o.id !== s.id) { toast('Ce numéro existe déjà'); return false; }
-      s.code = v.code; if (s.hiveId !== v.hiveId) s.since = v.hiveId ? today() : ''; s.hiveId = v.hiveId; save(); render(true);
+      const tr = num(v.tare); s.tare = tr > 0 ? r2(tr) : ''; s.code = v.code; if (s.hiveId !== v.hiveId) s.since = v.hiveId ? today() : ''; s.hiveId = v.hiveId; save(); render(true);
     }
   });
 }
@@ -1411,6 +1471,6 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) sync
 setInterval(() => { if (!document.hidden && sess) syncNow(); }, 60000);
 if (sess) setTimeout(() => syncNow(), 900);
 
-window.Ruchier = { mergeDb, canon, SUPA, syncNow, login, sync, get sess() { return sess; }, homeKeys, get db() { return db; }, ACT, handleScan, scan, render, EXPORTS, csvText, parseCode };
+window.Ruchier = { mergeDb, canon, SUPA, syncNow, login, sync, get sess() { return sess; }, homeKeys, get db() { return db; }, ACT, handleScan, scan, render, EXPORTS, csvText, parseCode, Snd };
 render(false);
 })();

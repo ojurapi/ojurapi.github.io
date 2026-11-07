@@ -260,3 +260,6 @@ body.hasdock main{padding-bottom:130px}
 .tiles.editing .tile.edit{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .tiles.editing .tile.edit.dragging{touch-action:none}
 .mainline{grid-column:1/-1;text-align:center;font-size:13px;font-weight:700;color:#e5702a;border-top:3px solid #e5702a;padding-top:6px;margin:4px 0 2px}
+#hrows .hr{border:1px solid var(--line);border-radius:14px;padding:8px 10px;margin:8px 0;background:var(--card)}
+#hrows .hrr{display:flex;gap:10px}#hrows .hrr>div{flex:1}
+#hrows .htot{text-align:center;font-size:18px;margin:10px 0 2px}
